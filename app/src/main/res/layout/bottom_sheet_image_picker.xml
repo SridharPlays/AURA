@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Update Profile Picture"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/option_camera"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Take Photo with Camera"
+        android:padding="12dp"
+        android:textSize="16sp"
+        android:drawablePadding="16dp"
+        android:gravity="center_vertical"
+        android:background="?attr/selectableItemBackground"
+        app:drawableStartCompat="@drawable/ic_camera" />
+
+    <TextView
+        android:id="@+id/option_gallery"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Choose from Gallery"
+        android:padding="12dp"
+        android:textSize="16sp"
+        android:drawablePadding="16dp"
+        android:gravity="center_vertical"
+        android:background="?attr/selectableItemBackground"
+        app:drawableStartCompat="@drawable/ic_gallery" />
+
+</LinearLayout>

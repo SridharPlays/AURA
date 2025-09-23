@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/aura_charcoal"
+    tools:context=".SettingsActivity">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar_settings"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/aura_charcoal"
+        app:title="Settings"
+        app:titleTextColor="@color/aura_cream" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Profile Section -->
+            <TextView
+                style="@style/SettingsHeader"
+                android:text="Profile" />
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Username"
+                        android:textColor="@color/aura_accent_muted"
+                        android:fontFamily="@font/dm_sans"/>
+                    <EditText
+                        android:id="@+id/username_edittext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Enter your name"
+                        android:inputType="textPersonName"
+                        android:textColor="@color/aura_cream"
+                        android:fontFamily="@font/dm_sans"
+                        android:textColorHint="@color/aura_accent_muted"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Data & Storage Section -->
+            <TextView
+                style="@style/SettingsHeader"
+                android:text="Data &amp; Storage"
+                android:layout_marginTop="24dp"/>
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/clearCache"
+                        style="@style/SettingsItem"
+                        android:text="Clear Cache"/>
+                    <View style="@style/Divider" />
+                    <TextView
+                        android:id="@+id/clearJournal"
+                        style="@style/SettingsItem"
+                        android:text="Clear Mood Journal"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Legal & About Section -->
+            <TextView
+                style="@style/SettingsHeader"
+                android:text="Legal &amp; About"
+                android:layout_marginTop="24dp"/>
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/privacyPolicy"
+                        style="@style/SettingsItem"
+                        android:text="Privacy Policy"/>
+                    <View style="@style/Divider" />
+                    <TextView
+                        android:id="@+id/termsOfService"
+                        style="@style/SettingsItem"
+                        android:text="Terms of Service"/>
+                    <View style="@style/Divider" />
+                    <TextView
+                        android:id="@+id/aboutCredits"
+                        style="@style/SettingsItem"
+                        android:text="Acknowledgements"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Spacer to push content to the bottom -->
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- Save Button -->
+            <Button
+                android:id="@+id/save_settings_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:paddingVertical="12dp"
+                android:text="Save Changes" />
+
+            <!-- Footer -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="16dp"
+                android:fontFamily="@font/dm_sans"
+                android:gravity="center"
+                android:text="Crafted with ❤️ and 🦖 by Sridhar"
+                android:textColor="@color/aura_accent_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

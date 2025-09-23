@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">AURA</string>
+    <string name="legal_links">By continuing, you agree to our <a href="https://www.playmood.com/terms">Terms of Service</a> and acknowledge our <a href="https://www.playmood.com/privacy">Privacy Policy</a>.</string>
+
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="profile">Profile</string>
+    <string name="full_name">Full Name</string>
+    <string name="username">\@username</string>
+    <string name="current_mood">Current Mood</string>
+    <string name="go_to_music_player">Go to Music Player</string>
+    <string name="music_player">Music Player</string>
+    <string name="vibe_recap">Vibe Recap</string>
+    <string name="settings">Settings</string>
+</resources>
