@@ -61,7 +61,7 @@ To get this project running on your own device:
 1.  **Clone the repository:**
 
     ```
-    git clone [https://github.com/SridharPlays/AURA.git](https://github.com/SridharPlays/AURA.git)
+    git clone https://github.com/SridharPlays/AURA.git
     ```
 
 2.  **Open in Android Studio:**
