@@ -110,6 +110,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <SeekBar
+        android:id="@+id/bassBoostSeekbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:visibility="gone"  android:progressTint="@color/aura_cream"
+        android:thumbTint="@color/aura_accent_muted" />
+
     <TextView
         android:id="@+id/startTime"
         android:layout_width="wrap_content"

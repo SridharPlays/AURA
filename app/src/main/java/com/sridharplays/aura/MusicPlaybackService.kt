@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.media.MediaPlayer
+import android.media.audiofx.BassBoost
 import android.media.audiofx.EnvironmentalReverb
 import android.media.audiofx.Virtualizer
 import android.net.Uri
@@ -46,10 +47,13 @@ class MusicPlaybackService : Service() {
     private var mediaPlayer: MediaPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
 
-    // 8D Audio Components
+    // Audio Effects
     private var reverb: EnvironmentalReverb? = null
     private var virtualizer: Virtualizer? = null
+    private var bassBoost: BassBoost? = null // Bass Boost
     private var is8DEnabled = false
+    private var isBassBoostEnabled = false   // Bass Boost state
+    private var currentBassBoostStrength = 0 // Bass Boost strength (0-1000)
 
     // Communication with UI
     private val binder = MusicBinder()
@@ -59,6 +63,8 @@ class MusicPlaybackService : Service() {
     val shuffleModeEnabled = MutableLiveData<Boolean>()
     val repeatModeState = MutableLiveData<RepeatMode>()
     val is8DModeEnabled = MutableLiveData<Boolean>()
+    val bassBoostModeEnabled = MutableLiveData<Boolean>() // LiveData for Bass Boost state
+    val bassBoostStrength = MutableLiveData<Int>()      // LiveData for Bass Boost strength
     private val handler = Handler(Looper.getMainLooper())
 
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
@@ -122,6 +128,7 @@ class MusicPlaybackService : Service() {
         handler.removeCallbacks(seekBarUpdateRunnable)
         reverb?.release()
         virtualizer?.release()
+        bassBoost?.release() // Release BassBoost
         mediaPlayer?.release()
         mediaPlayer = null
         mediaSession?.release()
@@ -212,6 +219,30 @@ class MusicPlaybackService : Service() {
         }
     }
 
+    // BASS BOOST METHODS
+    fun toggleBassBoost(enable: Boolean) {
+        isBassBoostEnabled = enable
+        bassBoostModeEnabled.postValue(enable)
+        try {
+            bassBoost?.enabled = enable
+        } catch (e: Exception) {
+            bassBoostModeEnabled.postValue(false)
+        }
+    }
+
+    fun setBassBoostStrength(strength: Int) {
+        // Strength is from 0 to 1000
+        if (strength in 0..1000) {
+            currentBassBoostStrength = strength
+            try {
+                bassBoost?.setStrength(strength.toShort())
+                bassBoostStrength.postValue(strength)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun seekTo(position: Int) {
         mediaPlayer?.seekTo(position)
         updatePlaybackState()
@@ -237,11 +268,14 @@ class MusicPlaybackService : Service() {
             updateMetadata(song)
             updatePlaybackState()
 
-            // Attach 8D Audio Effects
+            // Release previous effects
             reverb?.release()
             virtualizer?.release()
+            bassBoost?.release() // Release old BassBoost instance
+
             val audioSessionId = mediaPlayer!!.audioSessionId
             if (audioSessionId != -1) {
+                // Attach 8D Audio Effects
                 reverb = EnvironmentalReverb(0, audioSessionId).apply {
                     reverbLevel = -2000
                     roomLevel = -1000
@@ -254,6 +288,19 @@ class MusicPlaybackService : Service() {
 
                 reverb?.enabled = is8DEnabled
                 virtualizer?.enabled = is8DEnabled
+
+                // Attach Bass Boost Effect
+                try {
+                    bassBoost = BassBoost(0, audioSessionId).apply {
+                        if (strengthSupported) {
+                            setStrength(currentBassBoostStrength.toShort())
+                        }
+                    }
+                    bassBoost?.enabled = isBassBoostEnabled
+                } catch (e: Exception) {
+                    bassBoost = null // Device may not support it
+                    e.printStackTrace()
+                }
             }
             handler.post(seekBarUpdateRunnable)
         } catch (e: Exception) {
@@ -273,8 +320,6 @@ class MusicPlaybackService : Service() {
             }
         }
     }
-
-    // In MusicPlaybackService.kt
 
     private fun updateAndShowNotification(song: MusicPlayerFragment.Song?) {
         // Check for notification permission on Android 13+

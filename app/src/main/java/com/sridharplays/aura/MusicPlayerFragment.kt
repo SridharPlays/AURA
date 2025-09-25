@@ -35,13 +35,12 @@ class MusicPlayerFragment : Fragment() {
     private var userIsSeeking = false
     private var nextSongIndex: Int = -1
 
-    // --- View Components ---
+    // View Components
     private lateinit var btnPlayPause: ImageButton
     private lateinit var btnNext: ImageButton
     private lateinit var btnPrevious: ImageButton
     private lateinit var btnShuffle: ImageButton
     private lateinit var btnRepeat: ImageButton
-    // REMOVED: btn8D is no longer a separate button
     private lateinit var seekBar: SeekBar
     private lateinit var songTitle: TextView
     private lateinit var artistName: TextView
@@ -52,6 +51,7 @@ class MusicPlayerFragment : Fragment() {
     private lateinit var nextSongArtist: TextView
     private lateinit var nextSongAlbumArt: ImageView
     private lateinit var nextSongLayout: LinearLayout
+    private lateinit var bassBoostSeekbar: SeekBar
 
     data class Song(
         val id: Long, val title: String, val artist: String,
@@ -81,7 +81,6 @@ class MusicPlayerFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        // This line is required to show the options menu in a fragment
         setHasOptionsMenu(true)
         return inflater.inflate(R.layout.fragment_music_player, container, false)
     }
@@ -90,24 +89,25 @@ class MusicPlayerFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         initializeViews(view)
 
-        // Setup the Toolbar
         val toolbar: Toolbar = view.findViewById(R.id.player_toolbar)
         (activity as AppCompatActivity).setSupportActionBar(toolbar)
-        (activity as AppCompatActivity).supportActionBar?.title = "" // Optional: clear title
+        (activity as AppCompatActivity).supportActionBar?.title = ""
 
         setupClickListeners()
         startAndBindService()
     }
 
-    // --- ADDED: Methods to create and handle the options menu ---
     @Deprecated("Deprecated in Java")
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.player_menu, menu)
         super.onCreateOptionsMenu(menu, inflater)
-        // Ensure the menu item's checked state is in sync when it's created
+        // Sync 8D audio checkmark
         musicService?.is8DModeEnabled?.value?.let { isEnabled ->
-            val menuItem = menu.findItem(R.id.menu_8d_audio)
-            menuItem?.isChecked = isEnabled
+            menu.findItem(R.id.menu_8d_audio)?.isChecked = isEnabled
+        }
+        // Sync Bass Boost checkmark
+        musicService?.bassBoostModeEnabled?.value?.let { isEnabled ->
+            menu.findItem(R.id.menu_bass_boost)?.isChecked = isEnabled
         }
     }
 
@@ -115,16 +115,20 @@ class MusicPlayerFragment : Fragment() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.menu_8d_audio -> {
-                // Toggle the 8D mode and update the menu item's checkmark
                 val isCurrentlyEnabled = item.isChecked
                 musicService?.toggle8DMode(!isCurrentlyEnabled)
+                item.isChecked = !isCurrentlyEnabled
+                true
+            }
+            R.id.menu_bass_boost -> { // Handle Bass Boost toggle
+                val isCurrentlyEnabled = item.isChecked
+                musicService?.toggleBassBoost(!isCurrentlyEnabled)
                 item.isChecked = !isCurrentlyEnabled
                 true
             }
             else -> super.onOptionsItemSelected(item)
         }
     }
-    // --------------------------------------------------------
 
     private fun startAndBindService() {
         Intent(requireContext(), MusicPlaybackService::class.java).also { intent ->
@@ -177,9 +181,19 @@ class MusicPlayerFragment : Fragment() {
             }
         }
         musicService?.is8DModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
-            // Invalidate the options menu to redraw it with the correct checkmark state
             activity?.invalidateOptionsMenu()
             Toast.makeText(requireContext(), if (isEnabled) "8D Audio ON" else "8D Audio OFF", Toast.LENGTH_SHORT).show()
+        }
+
+        // bass boost observers
+        musicService?.bassBoostModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
+            activity?.invalidateOptionsMenu() // Update checkmark in menu
+            bassBoostSeekbar.visibility = if (isEnabled) View.VISIBLE else View.GONE
+            Toast.makeText(requireContext(), if (isEnabled) "Bass Boost ON" else "Bass Boost OFF", Toast.LENGTH_SHORT).show()
+        }
+
+        musicService?.bassBoostStrength?.observe(viewLifecycleOwner) { strength ->
+            bassBoostSeekbar.progress = strength
         }
     }
 
@@ -231,7 +245,6 @@ class MusicPlayerFragment : Fragment() {
         btnPrevious = view.findViewById(R.id.btnPrevious)
         btnShuffle = view.findViewById(R.id.btnShuffle)
         btnRepeat = view.findViewById(R.id.btnRepeat)
-        // REMOVED: btn8D is no longer a separate button
         seekBar = view.findViewById(R.id.songSeekbar)
         currentTime = view.findViewById(R.id.startTime)
         totalTime = view.findViewById(R.id.endTime)
@@ -239,6 +252,7 @@ class MusicPlayerFragment : Fragment() {
         nextSongArtist = view.findViewById(R.id.nextSongArtist)
         nextSongAlbumArt = view.findViewById(R.id.nextSongAlbumArt)
         nextSongLayout = view.findViewById(R.id.nextSongLayout)
+        bassBoostSeekbar = view.findViewById(R.id.bassBoostSeekbar) // Initialize Bass Boost SeekBar
     }
 
     private fun setupClickListeners() {
@@ -262,6 +276,20 @@ class MusicPlayerFragment : Fragment() {
             override fun onStopTrackingTouch(sb: SeekBar?) {
                 sb?.let { musicService?.seekTo(it.progress) }
                 userIsSeeking = false
+            }
+        })
+
+        // bass boost seekbar
+        bassBoostSeekbar.max = 1000 // BassBoost strength is from 0 to 1000
+        bassBoostSeekbar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                // We will set the value on stop to avoid flooding the service
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                seekBar?.let {
+                    musicService?.setBassBoostStrength(it.progress)
+                }
             }
         })
     }

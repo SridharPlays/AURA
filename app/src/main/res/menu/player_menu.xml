@@ -8,4 +8,9 @@
         android:checkable="true"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/menu_bass_boost"
+        android:title="Bass Boost"
+        android:checkable="true" />
+
 </menu>
