@@ -49,9 +49,6 @@ class JournalFragment : Fragment() {
         return view
     }
 
-    /**
-     * Creates and displays a popup menu with options for a journal entry.
-     */
     private fun showContextMenu(entry: JournalEntry, view: View) {
         val popup = PopupMenu(requireContext(), view)
         popup.menuInflater.inflate(R.menu.journal_context_menu, popup.menu)

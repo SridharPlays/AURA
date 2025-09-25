@@ -26,7 +26,7 @@ import java.io.File
 
 class ProfileFragment : Fragment() {
 
-    // --- View Components ---
+    // View Components
     private lateinit var fullNameTextView: TextView
     private lateinit var usernameTextView: TextView
     private lateinit var moodTextView: TextView
@@ -36,7 +36,7 @@ class ProfileFragment : Fragment() {
     // To hold the URI for the photo taken by the camera
     private var tempImageUri: Uri? = null
 
-    // --- ActivityResultLaunchers for getting images and permissions ---
+    // ActivityResultLaunchers for getting images and permissions
     private val galleryLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == AppCompatActivity.RESULT_OK) {
             val imageUri = result.data?.data

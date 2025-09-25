@@ -68,7 +68,6 @@ class PlaylistFragment : Fragment() {
             .map { SongGroup(it.key, it.value) }
             .sortedBy { it.groupName.lowercase() }
 
-        // --- UPDATED CLICK LOGIC ---
         outerRecyclerView.adapter = PlaylistGroupAdapter(songsByArtist) { selectedSong ->
             // 1. Find the index of the clicked song in the complete, original list
             val globalIndex = allSongs.indexOf(selectedSong)
