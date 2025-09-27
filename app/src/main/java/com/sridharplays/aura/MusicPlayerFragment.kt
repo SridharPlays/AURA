@@ -26,6 +26,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.squareup.picasso.Picasso
 
 class MusicPlayerFragment : Fragment() {
@@ -63,20 +67,31 @@ class MusicPlayerFragment : Fragment() {
             val binder = service as MusicPlaybackService.MusicBinder
             musicService = binder.getService()
             isBound = true
+            // Set up observers immediately after connecting to the service
+            observeServiceData()
 
+            // Check if we need to load the initial playlist
             if (musicService?.isPlaying?.value == false && musicService?.currentSong?.value == null) {
-                val songList = getAllAudioFromDevice(requireContext())
-                if (songList.isNotEmpty()) {
-                    musicService?.loadPlaylist(songList, 0)
-                } else {
-                    Toast.makeText(requireContext(), "No music found in AURA_Music folder", Toast.LENGTH_LONG).show()
+                // Launch a coroutine to avoid blocking the main thread
+                lifecycleScope.launch {
+                    val songList = withContext(Dispatchers.IO) {
+                        // This heavy operation now runs in the background
+                        getAllAudioFromDevice(requireContext())
+                    }
+
+                    // Update UI or load playlist back on the main thread
+                    if (songList.isNotEmpty()) {
+                        musicService?.loadPlaylist(songList, 0)
+                    } else {
+                        Toast.makeText(requireContext(), "No music found in AURA_Music folder", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
-            observeServiceData()
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
             isBound = false
+            musicService = null // Also good to nullify the service reference
         }
     }
 
@@ -198,8 +213,8 @@ class MusicPlayerFragment : Fragment() {
     }
 
     private fun updateMainUI(song: Song) {
-        songTitle.text = truncateText(song.title)
-        artistName.text = truncateText(song.artist)
+        songTitle.text = song.title
+        artistName.text = song.artist
         totalTime.text = formatTime(song.duration)
         seekBar.max = song.duration
         val albumArtUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), song.albumId)
@@ -230,8 +245,8 @@ class MusicPlayerFragment : Fragment() {
         this.nextSongIndex = nextIndexLocal
 
         val nextSong = songList[nextIndexLocal]
-        nextSongTitle.text = truncateText(nextSong.title)
-        nextSongArtist.text = truncateText(nextSong.artist)
+        nextSongTitle.text = nextSong.title
+        nextSongArtist.text = nextSong.artist
         val nextArtUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), nextSong.albumId)
         Picasso.get().load(nextArtUri).placeholder(R.drawable.aura_logo).error(R.drawable.aura_logo).into(nextSongAlbumArt)
     }
@@ -252,7 +267,10 @@ class MusicPlayerFragment : Fragment() {
         nextSongArtist = view.findViewById(R.id.nextSongArtist)
         nextSongAlbumArt = view.findViewById(R.id.nextSongAlbumArt)
         nextSongLayout = view.findViewById(R.id.nextSongLayout)
-        bassBoostSeekbar = view.findViewById(R.id.bassBoostSeekbar) // Initialize Bass Boost SeekBar
+        bassBoostSeekbar = view.findViewById(R.id.bassBoostSeekbar)
+
+        songTitle.isSelected = true
+        nextSongTitle.isSelected = true
     }
 
     private fun setupClickListeners() {
@@ -294,19 +312,12 @@ class MusicPlayerFragment : Fragment() {
         })
     }
 
-    override fun onStop() {
-        super.onStop()
+    override fun onDestroyView() {
+        super.onDestroyView()
+        // Unbind from the service when the fragment's view is destroyed
         if (isBound) {
             requireActivity().unbindService(connection)
             isBound = false
-        }
-    }
-
-    private fun truncateText(text: String, maxLength: Int = 25): String {
-        return if (text.length > maxLength) {
-            text.substring(0, maxLength) + "..."
-        } else {
-            text
         }
     }
 

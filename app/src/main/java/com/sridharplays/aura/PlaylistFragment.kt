@@ -64,8 +64,8 @@ class PlaylistFragment : Fragment() {
 
         allSongs = getAllAudioFromDevice(requireContext())
 
-        val songsByArtist = allSongs.groupBy { it.artist }
-            .map { SongGroup(it.key, it.value) }
+        val songsByArtist = allSongs.groupBy { it.artist.split(',').first().trim() }
+            .map { (artistName, songsInGroup) -> SongGroup(artistName, songsInGroup) }
             .sortedBy { it.groupName.lowercase() }
 
         outerRecyclerView.adapter = PlaylistGroupAdapter(songsByArtist) { selectedSong ->

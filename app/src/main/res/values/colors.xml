@@ -6,4 +6,6 @@
     <color name="aura_charcoal">#2B2B2B</color>
     <color name="aura_cream">#EAE3D9</color>
     <color name="aura_accent_muted">#BCAE9F</color>
+
+    <color name="aura_cream_muted">#C5BEB6</color>
 </resources>

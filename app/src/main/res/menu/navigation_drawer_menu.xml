@@ -14,9 +14,13 @@
             android:icon="@android:drawable/ic_menu_manage"
             android:title="Profile" />
         <item
+            android:id="@+id/all_songs"
+            android:title="Music Library"
+            android:icon="@drawable/ic_grid_view" />
+        <item
             android:id="@+id/nav_playlist"
             android:icon="@drawable/ic_library_music"
-            android:title="My Library" />
+            android:title="My Playlists" />
     </group>
     <item android:title="Other">
         <menu>

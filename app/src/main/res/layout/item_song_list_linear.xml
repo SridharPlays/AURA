@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="8dp"
+    android:background="?attr/selectableItemBackground">
+
+    <ImageView
+        android:id="@+id/album_art_imageview"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:layout_marginEnd="16dp"
+        android:scaleType="centerCrop"
+        tools:src="@drawable/aura_logo" />
+
+    <TextView
+        android:id="@+id/song_title_textview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@id/album_art_imageview"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/aura_cream"
+        android:textSize="16sp"
+        android:fontFamily="@font/dm_sans"
+        tools:text="This is a Really Long Song Title" />
+
+    <TextView
+        android:id="@+id/artist_name_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/song_title_textview"
+        android:layout_marginTop="4dp"
+        android:layout_toEndOf="@id/album_art_imageview"
+        android:textColor="@color/aura_cream_muted"
+        android:textSize="14sp"
+        tools:text="Artist Name" />
+
+    <TextView
+        android:id="@+id/song_duration_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/song_title_textview"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/aura_cream_muted"
+        android:textSize="14sp"
+        tools:text="4:20" />
+
+</RelativeLayout>

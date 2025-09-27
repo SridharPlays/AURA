@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
                     R.id.nav_profile -> ProfileFragment()
                     R.id.nav_journal -> JournalFragment()
                     R.id.nav_playlist -> PlaylistFragment()
+                    R.id.all_songs -> AllSongsFragment()
                     else -> HomeFragment()
                 }
                 supportFragmentManager.beginTransaction()
@@ -134,10 +135,8 @@ class MainActivity : AppCompatActivity() {
                 if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
                     drawerLayout.closeDrawer(GravityCompat.START)
                 } else {
-                    if (isEnabled) {
-                        isEnabled = false
-                        onBackPressedDispatcher.onBackPressed()
-                    }
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
                 }
             }
         })
