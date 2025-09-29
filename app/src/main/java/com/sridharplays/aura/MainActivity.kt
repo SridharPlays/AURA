@@ -1,37 +1,23 @@
 package com.sridharplays.aura
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.MenuItem
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.GravityCompat
-import androidx.drawerlayout.widget.DrawerLayout
-import com.google.android.material.navigation.NavigationView
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.Fragment
+import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var drawerLayout: DrawerLayout
-    private lateinit var navigationView: NavigationView
-    private lateinit var toggle: ActionBarDrawerToggle
+    // The new BottomNavigationView property
+    private lateinit var bottomNavigationView: BottomNavigationView
 
-    // Launcher for handling the result back from SettingsActivity
-    private val settingsLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) {
-                Toast.makeText(this, "Settings Saved!", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-    // Launcher for handling multiple permission requests at once
+    // Launcher for handling multiple permission requests at once (unchanged)
     private val requestMultiplePermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             permissions.entries.forEach {
@@ -45,56 +31,46 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         installSplashScreen()
-
         setContentView(R.layout.activity_main)
 
-        drawerLayout = findViewById(R.id.drawer_layout)
-        navigationView = findViewById(R.id.nav_view)
-        val toolbar: androidx.appcompat.widget.Toolbar = findViewById(R.id.toolbar)
-        setSupportActionBar(toolbar)
+        supportActionBar?.hide()
 
+        // Initialize Bottom Navigation
+        bottomNavigationView = findViewById(R.id.bottom_navigation)
+        setupBottomNavListener()
+
+        // Ask for Permissions (Unchanged)
         askForPermissions()
 
-        toggle = ActionBarDrawerToggle(this, drawerLayout, R.string.navigation_drawer_open, R.string.navigation_drawer_close)
-        drawerLayout.addDrawerListener(toggle)
-        toggle.syncState()
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-
+        // Load Default Fragment
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
                 .replace(R.id.fragment_container, HomeFragment())
                 .commit()
-            navigationView.setCheckedItem(R.id.nav_home)
             supportActionBar?.title = "Home"
+            // Set the corresponding menu item as selected in the bottom nav
+            bottomNavigationView.selectedItemId = R.id.nav_home
         }
-
-        setupNavigationListener()
-        setupBackButtonHandler()
     }
 
-    private fun setupNavigationListener() {
-        navigationView.setNavigationItemSelectedListener { menuItem ->
-            if (menuItem.itemId == R.id.nav_settings) {
-                val intent = Intent(this, SettingsActivity::class.java)
-                settingsLauncher.launch(intent)
-            } else {
-                val fragment = when (menuItem.itemId) {
-                    R.id.nav_home -> HomeFragment()
-                    R.id.nav_profile -> ProfileFragment()
-                    R.id.nav_journal -> JournalFragment()
-                    R.id.nav_playlist -> PlaylistFragment()
-                    R.id.all_songs -> AllSongsFragment()
-                    else -> HomeFragment()
-                }
-                supportFragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, fragment)
-                    .commit()
-                supportActionBar?.title = menuItem.title
+    private fun setupBottomNavListener() {
+        bottomNavigationView.setOnItemSelectedListener { menuItem ->
+            val selectedFragment: Fragment = when (menuItem.itemId) {
+                R.id.nav_home -> HomeFragment()
+                R.id.nav_journal -> JournalFragment()
+                R.id.nav_playlist -> PlaylistFragment()
+                R.id.all_songs -> AllSongsFragment()
+                R.id.nav_profile -> ProfileFragment()
+                else -> HomeFragment() // Default case
             }
-            drawerLayout.closeDrawer(GravityCompat.START)
-            true
+
+            // Replace the fragment in the container
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.fragment_container, selectedFragment)
+                .commit()
+
+            true // Return true to display the item as the selected item
         }
     }
 
@@ -120,25 +96,5 @@ class MainActivity : AppCompatActivity() {
         if (permissionsToRequest.isNotEmpty()) {
             requestMultiplePermissionsLauncher.launch(permissionsToRequest.toTypedArray())
         }
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (toggle.onOptionsItemSelected(item)) {
-            return true
-        }
-        return super.onOptionsItemSelected(item)
-    }
-
-    private fun setupBackButtonHandler() {
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    drawerLayout.closeDrawer(GravityCompat.START)
-                } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                }
-            }
-        })
     }
 }

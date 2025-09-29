@@ -108,15 +108,5 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:fontFamily="@font/dm_sans"
-            android:gravity="center"
-            android:text="Crafted with ❤️ and 🦖 by Sridhar"
-            android:textColor="@color/aura_accent_muted"
-            android:textSize="14sp" />
     </LinearLayout>
 </ScrollView>

@@ -1,31 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="8dp"
-    android:background="?attr/selectableItemBackground">
+    android:background="?attr/selectableItemBackground"
+    android:padding="8dp">
 
-    <ImageView
-        android:id="@+id/album_art_imageview"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/album_art_card"
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:layout_alignParentStart="true"
         android:layout_centerVertical="true"
         android:layout_marginEnd="16dp"
-        android:scaleType="centerCrop"
-        tools:src="@drawable/aura_logo" />
+        app:cardCornerRadius="8dp"
+        app:cardElevation="0dp">
+
+        <ImageView
+            android:id="@+id/album_art_imageview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            tools:src="@drawable/aura_logo" />
+
+    </androidx.cardview.widget.CardView>
 
     <TextView
         android:id="@+id/song_title_textview"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_toEndOf="@id/album_art_imageview"
+        android:layout_toEndOf="@id/album_art_card"
         android:ellipsize="end"
+        android:fontFamily="@font/dm_sans"
         android:maxLines="1"
         android:textColor="@color/aura_cream"
         android:textSize="16sp"
-        android:fontFamily="@font/dm_sans"
         tools:text="This is a Really Long Song Title" />
 
     <TextView
@@ -34,7 +44,7 @@
         android:layout_height="wrap_content"
         android:layout_below="@id/song_title_textview"
         android:layout_marginTop="4dp"
-        android:layout_toEndOf="@id/album_art_imageview"
+        android:layout_toEndOf="@id/album_art_card"
         android:textColor="@color/aura_cream_muted"
         android:textSize="14sp"
         tools:text="Artist Name" />

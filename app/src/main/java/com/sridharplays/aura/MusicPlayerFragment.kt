@@ -11,9 +11,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.provider.MediaStore
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
@@ -22,15 +19,16 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.navigation.NavigationView
+import com.squareup.picasso.Picasso
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.squareup.picasso.Picasso
 
 class MusicPlayerFragment : Fragment() {
 
@@ -39,7 +37,12 @@ class MusicPlayerFragment : Fragment() {
     private var userIsSeeking = false
     private var nextSongIndex: Int = -1
 
-    // View Components
+    // Views for the side menu
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var effectsNavigationView: NavigationView
+    private lateinit var openMenuButton: ImageButton
+
+    // Existing View Components
     private lateinit var btnPlayPause: ImageButton
     private lateinit var btnNext: ImageButton
     private lateinit var btnPrevious: ImageButton
@@ -67,19 +70,13 @@ class MusicPlayerFragment : Fragment() {
             val binder = service as MusicPlaybackService.MusicBinder
             musicService = binder.getService()
             isBound = true
-            // Set up observers immediately after connecting to the service
             observeServiceData()
 
-            // Check if we need to load the initial playlist
             if (musicService?.isPlaying?.value == false && musicService?.currentSong?.value == null) {
-                // Launch a coroutine to avoid blocking the main thread
                 lifecycleScope.launch {
                     val songList = withContext(Dispatchers.IO) {
-                        // This heavy operation now runs in the background
                         getAllAudioFromDevice(requireContext())
                     }
-
-                    // Update UI or load playlist back on the main thread
                     if (songList.isNotEmpty()) {
                         musicService?.loadPlaylist(songList, 0)
                     } else {
@@ -91,58 +88,19 @@ class MusicPlayerFragment : Fragment() {
 
         override fun onServiceDisconnected(arg0: ComponentName) {
             isBound = false
-            musicService = null // Also good to nullify the service reference
+            musicService = null
         }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        setHasOptionsMenu(true)
         return inflater.inflate(R.layout.fragment_music_player, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initializeViews(view)
-
-        val toolbar: Toolbar = view.findViewById(R.id.player_toolbar)
-        (activity as AppCompatActivity).setSupportActionBar(toolbar)
-        (activity as AppCompatActivity).supportActionBar?.title = ""
-
         setupClickListeners()
         startAndBindService()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        inflater.inflate(R.menu.player_menu, menu)
-        super.onCreateOptionsMenu(menu, inflater)
-        // Sync 8D audio checkmark
-        musicService?.is8DModeEnabled?.value?.let { isEnabled ->
-            menu.findItem(R.id.menu_8d_audio)?.isChecked = isEnabled
-        }
-        // Sync Bass Boost checkmark
-        musicService?.bassBoostModeEnabled?.value?.let { isEnabled ->
-            menu.findItem(R.id.menu_bass_boost)?.isChecked = isEnabled
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.menu_8d_audio -> {
-                val isCurrentlyEnabled = item.isChecked
-                musicService?.toggle8DMode(!isCurrentlyEnabled)
-                item.isChecked = !isCurrentlyEnabled
-                true
-            }
-            R.id.menu_bass_boost -> { // Handle Bass Boost toggle
-                val isCurrentlyEnabled = item.isChecked
-                musicService?.toggleBassBoost(!isCurrentlyEnabled)
-                item.isChecked = !isCurrentlyEnabled
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
     }
 
     private fun startAndBindService() {
@@ -172,37 +130,32 @@ class MusicPlayerFragment : Fragment() {
         musicService?.shuffleModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
             val tintColor = if (isEnabled) R.color.aura_accent_muted else R.color.white
             btnShuffle.setColorFilter(ContextCompat.getColor(requireContext(), tintColor))
-            Toast.makeText(requireContext(), if (isEnabled) "Shuffle ON" else "Shuffle OFF", Toast.LENGTH_SHORT).show()
-            updateNextInQueueUI()
         }
         musicService?.repeatModeState?.observe(viewLifecycleOwner) { mode ->
             when (mode) {
                 MusicPlaybackService.RepeatMode.OFF -> {
                     btnRepeat.setImageResource(R.drawable.ic_repeat)
                     btnRepeat.setColorFilter(ContextCompat.getColor(requireContext(), R.color.white))
-                    Toast.makeText(requireContext(), "Repeat OFF", Toast.LENGTH_SHORT).show()
                 }
                 MusicPlaybackService.RepeatMode.ALL -> {
                     btnRepeat.setImageResource(R.drawable.ic_repeat)
                     btnRepeat.setColorFilter(ContextCompat.getColor(requireContext(), R.color.aura_accent_muted))
-                    Toast.makeText(requireContext(), "Repeat ALL", Toast.LENGTH_SHORT).show()
                 }
                 MusicPlaybackService.RepeatMode.ONE -> {
                     btnRepeat.setImageResource(R.drawable.ic_repeat_one)
                     btnRepeat.setColorFilter(ContextCompat.getColor(requireContext(), R.color.aura_accent_muted))
-                    Toast.makeText(requireContext(), "Repeat ONE", Toast.LENGTH_SHORT).show()
                 }
                 null -> {}
             }
         }
+
         musicService?.is8DModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
-            activity?.invalidateOptionsMenu()
+            effectsNavigationView.menu.findItem(R.id.menu_8d_audio)?.isChecked = isEnabled
             Toast.makeText(requireContext(), if (isEnabled) "8D Audio ON" else "8D Audio OFF", Toast.LENGTH_SHORT).show()
         }
 
-        // bass boost observers
         musicService?.bassBoostModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
-            activity?.invalidateOptionsMenu() // Update checkmark in menu
+            effectsNavigationView.menu.findItem(R.id.menu_bass_boost)?.isChecked = isEnabled
             bassBoostSeekbar.visibility = if (isEnabled) View.VISIBLE else View.GONE
             Toast.makeText(requireContext(), if (isEnabled) "Bass Boost ON" else "Bass Boost OFF", Toast.LENGTH_SHORT).show()
         }
@@ -252,6 +205,10 @@ class MusicPlayerFragment : Fragment() {
     }
 
     private fun initializeViews(view: View) {
+        drawerLayout = view.findViewById(R.id.drawer_layout_player)
+        effectsNavigationView = view.findViewById(R.id.effects_nav_view)
+        openMenuButton = view.findViewById(R.id.button_effects_menu)
+
         songTitle = view.findViewById(R.id.songTitle)
         artistName = view.findViewById(R.id.artistName)
         albumArt = view.findViewById(R.id.albumArt)
@@ -274,6 +231,23 @@ class MusicPlayerFragment : Fragment() {
     }
 
     private fun setupClickListeners() {
+        openMenuButton.setOnClickListener {
+            drawerLayout.openDrawer(GravityCompat.END)
+        }
+
+        effectsNavigationView.setNavigationItemSelectedListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.menu_8d_audio -> {
+                    musicService?.toggle8DMode(!menuItem.isChecked)
+                }
+                R.id.menu_bass_boost -> {
+                    musicService?.toggleBassBoost(!menuItem.isChecked)
+                }
+            }
+            drawerLayout.closeDrawer(GravityCompat.END)
+            true
+        }
+
         btnPlayPause.setOnClickListener { musicService?.playOrPause() }
         btnNext.setOnClickListener { musicService?.playNext() }
         btnPrevious.setOnClickListener { musicService?.playPrevious() }
@@ -297,24 +271,17 @@ class MusicPlayerFragment : Fragment() {
             }
         })
 
-        // bass boost seekbar
-        bassBoostSeekbar.max = 1000 // BassBoost strength is from 0 to 1000
         bassBoostSeekbar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                // We will set the value on stop to avoid flooding the service
-            }
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {}
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                seekBar?.let {
-                    musicService?.setBassBoostStrength(it.progress)
-                }
+                seekBar?.let { musicService?.setBassBoostStrength(it.progress) }
             }
         })
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        // Unbind from the service when the fragment's view is destroyed
         if (isBound) {
             requireActivity().unbindService(connection)
             isBound = false

@@ -5,15 +5,13 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.MediaStore
 import android.view.*
+import android.widget.ImageButton
 import androidx.fragment.app.Fragment
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -29,7 +27,8 @@ class AllSongsFragment : Fragment() {
     private var isBound = false
     private lateinit var allSongs: List<MusicPlayerFragment.Song>
     private lateinit var recyclerView: RecyclerView
-    private var isGridView = false // State for our toggle
+    private lateinit var toggleButton: ImageButton // Added button reference
+    private var isGridView = false
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -58,7 +57,7 @@ class AllSongsFragment : Fragment() {
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        setHasOptionsMenu(true) // Important for showing the menu
+        // setHasOptionsMenu(true) has been removed as it's no longer needed
         return inflater.inflate(R.layout.fragment_all_songs, container, false)
     }
 
@@ -66,8 +65,17 @@ class AllSongsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         recyclerView = view.findViewById(R.id.songs_recyclerview)
+        toggleButton = view.findViewById(R.id.button_toggle_view) // Find the button
 
-        // Load songs in the background to prevent UI freeze (ANR)
+        // Set up the click listener for the new button
+        toggleButton.setOnClickListener {
+            isGridView = !isGridView // Flip the state
+            setupRecyclerView() // Re-setup the RecyclerView
+            // Update the button's icon
+            toggleButton.setImageResource(if (isGridView) R.drawable.ic_list_view else R.drawable.ic_grid_view)
+        }
+
+        // Load songs in the background (unchanged)
         viewLifecycleOwner.lifecycleScope.launch {
             allSongs = withContext(Dispatchers.IO) {
                 getAllAudioFromDevice(requireContext())
@@ -77,23 +85,7 @@ class AllSongsFragment : Fragment() {
         }
     }
 
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        inflater.inflate(R.menu.menu_all_songs, menu)
-        super.onCreateOptionsMenu(menu, inflater)
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_toggle_view -> {
-                isGridView = !isGridView // Flip the state
-                setupRecyclerView() // Re-setup the RecyclerView
-                // Update the icon
-                item.setIcon(if (isGridView) R.drawable.ic_list_view else R.drawable.ic_grid_view)
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
+    // The OptionsMenu methods (onCreateOptionsMenu, onOptionsItemSelected) have been removed.
 
     private fun setupRecyclerView() {
         recyclerView.layoutManager = if (isGridView) {
@@ -102,7 +94,6 @@ class AllSongsFragment : Fragment() {
             LinearLayoutManager(context)
         }
 
-        // Pass the isGridView state to the adapter's constructor
         recyclerView.adapter = AllSongsAdapter(allSongs, isGridView) { selectedSong ->
             val globalIndex = allSongs.indexOf(selectedSong)
             if (globalIndex != -1 && isBound) {

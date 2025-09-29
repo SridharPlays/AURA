@@ -3,9 +3,9 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="140dp"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
+    android:layout_margin="6dp"
     app:cardBackgroundColor="@color/aura_charcoal"
     app:cardCornerRadius="12dp"
     app:cardElevation="2dp">
@@ -19,7 +19,8 @@
         <ImageView
             android:id="@+id/album_art_imageview"
             android:layout_width="match_parent"
-            android:layout_height="140dp"
+            android:layout_height="180dp"
+            app:layout_constraintDimensionRatio="1:1"
             android:scaleType="centerCrop"
             tools:src="@drawable/aura_logo" />
 
@@ -30,7 +31,8 @@
             android:layout_marginTop="8dp"
             android:ellipsize="end"
             android:fontFamily="@font/dm_sans"
-            android:maxLines="1"
+            android:minLines="2"
+            android:maxLines="2"
             android:paddingHorizontal="8dp"
             android:textColor="@color/aura_cream"
             android:textSize="14sp"
