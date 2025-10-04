@@ -45,20 +45,16 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
 
     // Class Properties
     private lateinit var playCountDao: PlayCountDao
-    private var songList: List<MusicPlayerFragment.Song> = listOf()
+    private var songList: List<Song> = listOf() // Use Song, not MusicPlayerFragment.Song
     private var currentSongIndex: Int = -1
     private var isShuffle = false
     private var repeatMode = RepeatMode.OFF
     enum class RepeatMode { OFF, ALL, ONE }
 
-    // State for intelligent shuffle
     private var shuffledIndices: MutableList<Int> = mutableListOf()
     private var playHistory: MutableList<Int> = mutableListOf()
-
     private var mediaPlayer: MediaPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
-
-    // Audio Effects
     private var reverb: EnvironmentalReverb? = null
     private var virtualizer: Virtualizer? = null
     private var bassBoost: BassBoost? = null
@@ -66,12 +62,9 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     private var isBassBoostEnabled = false
     private var currentBassBoostStrength = 0
 
-    // Binder for Service Connection
     private val binder = MusicBinder()
-
-    // LiveData for UI Updates
     val isPlaying = MutableLiveData<Boolean>()
-    val currentSong = MutableLiveData<MusicPlayerFragment.Song?>()
+    val currentSong = MutableLiveData<Song?>() // Use Song
     val currentPosition = MutableLiveData<Int>()
     val shuffleModeEnabled = MutableLiveData<Boolean>()
     val repeatModeState = MutableLiveData<RepeatMode>()
@@ -80,12 +73,10 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     val bassBoostStrength = MutableLiveData<Int>()
     private val handler = Handler(Looper.getMainLooper())
 
-    // Modern Audio Focus
     private lateinit var audioManager: AudioManager
     private lateinit var audioFocusRequest: AudioFocusRequest
     private var resumeOnFocusGain = false
 
-    // MediaSession Callback
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
         override fun onPlay() { resumePlayback() }
         override fun onPause() { pausePlayback() }
@@ -100,18 +91,11 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
 
     override fun onBind(intent: Intent): IBinder = binder
 
-    /**
-     * Returns the current playback queue in the correct order (shuffled or sequential).
-     * This should be used by the UI to display the "Up Next" list.
-     */
-    fun getCurrentQueue(): List<MusicPlayerFragment.Song> {
+    fun getCurrentQueue(): List<Song> {
         if (!isShuffle) {
             return songList
         }
-
-        // If shuffled, construct the list in the correct playback order:
-        // [current song, ...upcoming shuffled songs]
-        val shuffledQueue = mutableListOf<MusicPlayerFragment.Song>()
+        val shuffledQueue = mutableListOf<Song>()
         if (currentSongIndex != -1 && currentSongIndex in songList.indices) {
             shuffledQueue.add(songList[currentSongIndex])
         }
@@ -119,14 +103,14 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         return shuffledQueue
     }
 
+    // NEW HELPER FUNCTION
+    fun getMasterSongList(): List<Song> = songList
+
     override fun onCreate() {
         super.onCreate()
-
         playCountDao = AppDatabase.getDatabase(this).playCountDao()
-
         val sharedPrefs = getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
         currentBassBoostStrength = sharedPrefs.getInt("BASS_BOOST_STRENGTH", 0)
-
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         mediaPlayer = MediaPlayer()
         createNotificationChannel()
@@ -163,7 +147,6 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
                 RepeatMode.ONE -> playSongAtIndex(currentSongIndex)
                 RepeatMode.ALL -> playNext()
                 RepeatMode.OFF -> {
-                    // Only stop if it's the last song and not shuffling
                     val isLastSong = if (isShuffle) shuffledIndices.isEmpty() else currentSongIndex == songList.size - 1
                     if (isLastSong) {
                         pausePlayback()
@@ -218,15 +201,12 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }
 
-    // Playback Controls
-    fun loadPlaylist(songs: List<MusicPlayerFragment.Song>, startIndex: Int) {
+    fun loadPlaylist(songs: List<Song>, startIndex: Int) {
         this.songList = songs
         this.currentSongIndex = if (songs.isNotEmpty()) startIndex else -1
-
         if (isShuffle) {
             generateShuffledIndices()
         }
-
         if (currentSongIndex != -1) {
             playSongAtIndex(currentSongIndex)
         }
@@ -266,24 +246,17 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
 
     fun playNext() {
         if (songList.isEmpty()) return
-
         if (isShuffle) {
             if (shuffledIndices.isEmpty()) {
-                // If the upcoming queue is empty, reshuffle everything for continuous play
                 generateShuffledIndices()
-                if (shuffledIndices.isEmpty()) return // Playlist finished or has only one song
+                if (shuffledIndices.isEmpty()) return
             }
-
-            // Add the song that's about to end to our history
             if (currentSongIndex != -1) {
                 playHistory.add(currentSongIndex)
             }
-
-            // Get and remove the next song from the upcoming shuffled list
             val nextIndex = shuffledIndices.removeAt(0)
             currentSongIndex = nextIndex
         } else {
-            // Standard sequential playback
             currentSongIndex = (currentSongIndex + 1) % songList.size
         }
         playSongAtIndex(currentSongIndex)
@@ -291,23 +264,17 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
 
     fun playPrevious() {
         if (songList.isEmpty()) return
-        // If song has played for more than 3 seconds, restart it. Otherwise, go to previous.
         if (mediaPlayer?.currentPosition ?: 0 > 3000) {
             seekTo(0)
         } else {
             if (isShuffle) {
-                if (playHistory.isEmpty()) return // No history to go back to
-
-                // Put the current song back at the beginning of the upcoming queue
+                if (playHistory.isEmpty()) return
                 if (currentSongIndex != -1) {
                     shuffledIndices.add(0, currentSongIndex)
                 }
-
-                // Pop the last song from history to play it
                 val previousIndex = playHistory.removeLast()
                 currentSongIndex = previousIndex
             } else {
-                // Standard sequential playback
                 currentSongIndex = if (currentSongIndex - 1 < 0) songList.size - 1 else currentSongIndex - 1
             }
             playSongAtIndex(currentSongIndex)
@@ -323,29 +290,22 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     fun playSongAtIndex(index: Int) {
         if (songList.isEmpty() || index !in songList.indices) return
         if (!requestAudioFocus()) return
-
         if (isShuffle && index != currentSongIndex) {
-            // If the user manually picks a song, we adjust the queue.
             val wasInUpcomingQueue = shuffledIndices.remove(index)
             if (wasInUpcomingQueue && currentSongIndex != -1) {
-                // The previously playing song is added to history.
                 playHistory.add(currentSongIndex)
             } else if (playHistory.contains(index)) {
-                // If user jumps back to a song in history, we rebuild the upcoming queue.
                 generateShuffledIndices(newCurrentIndex = index)
             }
         }
-
         currentSongIndex = index
         val song = songList[index]
         currentSong.postValue(song)
-
         try {
             mediaPlayer?.reset()
             mediaPlayer?.setDataSource(this, song.contentUri)
             mediaPlayer?.prepare()
             mediaPlayer?.start()
-
             isPlaying.postValue(true)
             updateMetadata(song)
             updatePlaybackState()
@@ -358,15 +318,13 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         updateAndShowNotification(song)
     }
 
-    fun getNextSong(): MusicPlayerFragment.Song? {
+    fun getNextSong(): Song? {
         if (songList.size < 2) return null
-
         val nextIndex: Int? = if (isShuffle) {
-            shuffledIndices.firstOrNull() // Get the actual next song from the shuffled queue
+            shuffledIndices.firstOrNull()
         } else {
             (currentSongIndex + 1) % songList.size
         }
-
         return if (nextIndex != null) songList.getOrNull(nextIndex) else null
     }
 
@@ -376,7 +334,6 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         if (isShuffle) {
             generateShuffledIndices()
         } else {
-            // Clear shuffle state when turning it off
             playHistory.clear()
             shuffledIndices.clear()
         }
@@ -385,16 +342,12 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     private fun generateShuffledIndices(newCurrentIndex: Int? = null) {
         if (songList.isNotEmpty()) {
             val indexToPreserve = newCurrentIndex ?: currentSongIndex
-
-            // Get all song indices except the one we're preserving as the current song
             shuffledIndices = (0 until songList.size).toMutableList()
             if (indexToPreserve != -1) {
                 shuffledIndices.remove(indexToPreserve)
             }
             shuffledIndices.shuffle()
-
             if (newCurrentIndex != null) {
-                // If user jumped to a new song, it becomes the current one and history is cleared.
                 currentSongIndex = newCurrentIndex
                 playHistory.clear()
             }
@@ -410,19 +363,16 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         repeatModeState.postValue(repeatMode)
     }
 
-    // Audio Effects
     private fun setupAudioEffects(audioSessionId: Int) {
         if (audioSessionId == -1) return
-
-        // Release old instances
         reverb?.release()
         virtualizer?.release()
         bassBoost?.release()
 
         try {
             reverb = EnvironmentalReverb(0, audioSessionId).apply {
-                reverbLevel = -2000
-                roomLevel = -1000
+                reverbLevel = -1000
+                roomLevel = -2000
                 enabled = is8DEnabled
             }
         } catch (e: Exception) {
@@ -439,7 +389,6 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
             virtualizer = null
             Log.e("AudioEffects", "Virtualizer failed to initialize.", e)
         }
-
         try {
             bassBoost = BassBoost(0, audioSessionId).apply {
                 if (strengthSupported) {
@@ -488,7 +437,6 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         }
     }
 
-    // System UI & Notifications
     private val seekBarUpdateRunnable = object : Runnable {
         override fun run() {
             mediaPlayer?.let {
@@ -500,21 +448,18 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         }
     }
 
-    private fun updateAndShowNotification(song: MusicPlayerFragment.Song?) {
+    private fun updateAndShowNotification(song: Song?) {
         if (song == null) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
-
         val playPauseIcon = if (mediaPlayer?.isPlaying == true) R.drawable.ic_pause_circle else R.drawable.ic_play_circle
         val playPauseAction = NotificationCompat.Action(playPauseIcon, "Play/Pause", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE))
         val nextAction = NotificationCompat.Action(R.drawable.ic_skip_next, "Next", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
         val prevAction = NotificationCompat.Action(R.drawable.ic_skip_previous, "Previous", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
-
         val contentIntent = Intent(this, MainActivity::class.java)
         val contentPendingIntent = PendingIntent.getActivity(this, 0, contentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(song.title)
             .setContentText(song.artist)
@@ -568,7 +513,7 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         mediaSession?.setPlaybackState(playbackState)
     }
 
-    private fun updateMetadata(song: MusicPlayerFragment.Song) {
+    private fun updateMetadata(song: Song) {
         val metadata = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)

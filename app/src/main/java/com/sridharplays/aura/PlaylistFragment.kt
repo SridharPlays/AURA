@@ -20,13 +20,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.squareup.picasso.Picasso
 import android.content.ContentUris
 
-data class SongGroup(val groupName: String, val songs: List<MusicPlayerFragment.Song>)
+data class SongGroup(val groupName: String, val songs: List<Song>)
 
 class PlaylistFragment : Fragment() {
 
     private var musicService: MusicPlaybackService? = null
     private var isBound = false
-    private lateinit var allSongs: List<MusicPlayerFragment.Song> // Keep a reference to the full list
+    private lateinit var allSongs: List<Song> // Keep a reference to the full list
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -86,8 +86,8 @@ class PlaylistFragment : Fragment() {
         return view
     }
 
-    private fun getAllAudioFromDevice(context: Context): List<MusicPlayerFragment.Song> {
-        val songList = mutableListOf<MusicPlayerFragment.Song>()
+    private fun getAllAudioFromDevice(context: Context): List<Song> {
+        val songList = mutableListOf<Song>()
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
@@ -127,7 +127,7 @@ class PlaylistFragment : Fragment() {
                 val albumId = c.getLong(albumIdColumn)
                 val duration = c.getInt(durationColumn)
                 val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-                songList.add(MusicPlayerFragment.Song(id, title, artist, albumId, duration, contentUri))
+                songList.add(Song(id, title, artist, albumId, duration, contentUri))
             }
         }
         return songList
@@ -136,7 +136,7 @@ class PlaylistFragment : Fragment() {
 
 class PlaylistGroupAdapter(
     private val songGroups: List<SongGroup>,
-    private val onSongClicked: (MusicPlayerFragment.Song) -> Unit
+    private val onSongClicked: (Song) -> Unit
 ) : RecyclerView.Adapter<PlaylistGroupAdapter.GroupViewHolder>() {
 
     class GroupViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -164,8 +164,8 @@ class PlaylistGroupAdapter(
 
 
 class SongAdapter(
-    private val songs: List<MusicPlayerFragment.Song>,
-    private val onSongClicked: (MusicPlayerFragment.Song) -> Unit
+    private val songs: List<Song>,
+    private val onSongClicked: (Song) -> Unit
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
     class SongViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

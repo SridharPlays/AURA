@@ -35,7 +35,7 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val songs = arguments?.getParcelableArrayList<MusicPlayerFragment.Song>(ARG_SONGS)
+        val songs = arguments?.getParcelableArrayList<Song>(ARG_SONGS)
         val currentSongId = arguments?.getLong(ARG_CURRENT_SONG_ID, -1L) ?: -1L
 
         if (songs.isNullOrEmpty()) {
@@ -65,7 +65,7 @@ class QueueBottomSheetFragment : BottomSheetDialogFragment() {
         private const val ARG_CURRENT_SONG_ID = "current_song_id"
 
         fun newInstance(
-            songs: ArrayList<MusicPlayerFragment.Song>,
+            songs: ArrayList<Song>,
             currentSongId: Long
         ): QueueBottomSheetFragment {
             val fragment = QueueBottomSheetFragment()

@@ -1,7 +1,6 @@
 package com.sridharplays.aura
 
 import android.content.ContentUris
-import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.squareup.picasso.Picasso
 
 class QueueAdapter(
-    private val songs: List<MusicPlayerFragment.Song>,
+    private val songs: List<Song>, // Simplified reference
     private val currentSongId: Long,
     private val onSongClicked: (Int) -> Unit // Callback to handle clicks
 ) : RecyclerView.Adapter<QueueAdapter.QueueViewHolder>() {
@@ -26,11 +25,14 @@ class QueueAdapter(
 
         init {
             itemView.setOnClickListener {
-                onSongClicked(adapterPosition)
+                // Check for NO_POSITION to prevent crashes during fast clicks/updates
+                if (adapterPosition != RecyclerView.NO_POSITION) {
+                    onSongClicked(adapterPosition)
+                }
             }
         }
 
-        fun bind(song: MusicPlayerFragment.Song) {
+        fun bind(song: Song) {
             title.text = song.title
             artist.text = song.artist
             duration.text = formatTime(song.duration)
@@ -47,10 +49,8 @@ class QueueAdapter(
             // Highlight the currently playing song
             if (song.id == currentSongId) {
                 title.setTextColor(ContextCompat.getColor(itemView.context, R.color.aura_accent_muted))
-                artist.setTextColor(ContextCompat.getColor(itemView.context, R.color.aura_accent_muted))
             } else {
                 title.setTextColor(ContextCompat.getColor(itemView.context, R.color.aura_cream))
-                artist.setTextColor(ContextCompat.getColor(itemView.context, R.color.aura_accent_muted)) // Or your default color
             }
         }
 
@@ -63,7 +63,7 @@ class QueueAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): QueueViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_song_list_linear, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.queue_song_item, parent, false)
         return QueueViewHolder(view)
     }
 

@@ -5,11 +5,9 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.os.Parcelable
 import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.MenuItem
@@ -32,22 +30,15 @@ import com.squareup.picasso.Picasso
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.parcelize.Parcelize
 
 class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractionListener {
 
-    // Song data class must be Parcelable to be passed in a Bundle
-    @Parcelize
-    data class Song(
-        val id: Long, val title: String, val artist: String,
-        val albumId: Long, val duration: Int, val contentUri: Uri
-    ) : Parcelable
+    // NOTE: The Song data class should be in its own file (Song.kt), not here.
 
     private var musicService: MusicPlaybackService? = null
     private var isBound = false
     private var userIsSeeking = false
 
-    // Views
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var effectsNavigationView: NavigationView
     private lateinit var openMenuButton: ImageButton
@@ -70,7 +61,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
     private var bassBoostSeekbar: SeekBar? = null
     private var bassBoostSeekbarMenuItem: MenuItem? = null
 
-    // Service Connection
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             val binder = service as MusicPlaybackService.MusicBinder
@@ -78,7 +68,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
             isBound = true
             observeServiceData()
 
-            // If the service is newly created and has no song, load the default playlist.
             val currentQueue = musicService?.getCurrentQueue()
             if (currentQueue.isNullOrEmpty()) {
                 lifecycleScope.launch {
@@ -93,14 +82,12 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
                 }
             }
         }
-
         override fun onServiceDisconnected(arg0: ComponentName) {
             isBound = false
             musicService = null
         }
     }
 
-    // Fragment Lifecycle
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         return inflater.inflate(R.layout.fragment_music_player, container, false)
     }
@@ -131,7 +118,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
         }
     }
 
-    // UI Logic
     private fun observeServiceData() {
         musicService?.isPlaying?.observe(viewLifecycleOwner) { playing ->
             btnPlayPause.setImageResource(if (playing) R.drawable.ic_pause_circle else R.drawable.ic_play_circle)
@@ -148,7 +134,7 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
         musicService?.shuffleModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
             val tintColor = if (isEnabled) R.color.aura_accent_muted else R.color.white
             btnShuffle.setColorFilter(ContextCompat.getColor(requireContext(), tintColor))
-            updateNextInQueueUI() // Update queue display when shuffle changes
+            updateNextInQueueUI()
         }
         musicService?.repeatModeState?.observe(viewLifecycleOwner) { mode ->
             when (mode) {
@@ -164,11 +150,9 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
                     btnRepeat.setImageResource(R.drawable.ic_repeat_one)
                     btnRepeat.setColorFilter(ContextCompat.getColor(requireContext(), R.color.aura_accent_muted))
                 }
-                null -> {} // Handle null case if necessary
+                null -> {}
             }
         }
-
-        // Effects Menu Observers
         musicService?.is8DModeEnabled?.observe(viewLifecycleOwner) { isEnabled ->
             effectsNavigationView.menu.findItem(R.id.menu_8d_audio)?.isChecked = isEnabled
         }
@@ -193,21 +177,16 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
 
     private fun updateNextInQueueUI() {
         val nextSong = musicService?.getNextSong()
-
         if (nextSong == null) {
             nextSongLayout.visibility = View.GONE
             nextSongLayout.setOnClickListener(null)
             return
         }
-
         nextSongLayout.visibility = View.VISIBLE
         nextSongTitle.text = nextSong.title
         nextSongArtist.text = nextSong.artist
         val nextArtUri = ContentUris.withAppendedId("content://media/external/audio/albumart".toUri(), nextSong.albumId)
         Picasso.get().load(nextArtUri).placeholder(R.drawable.aura_logo).error(R.drawable.aura_logo).into(nextSongAlbumArt)
-
-        // Simply tell the service to play the next song in its queue.
-        // This correctly handles both shuffle and sequential modes.
         nextSongLayout.setOnClickListener {
             musicService?.playNext()
         }
@@ -233,31 +212,23 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
         nextSongAlbumArt = view.findViewById(R.id.nextSongAlbumArt)
         nextSongLayout = view.findViewById(R.id.nextSongLayout)
         btnShowQueue = view.findViewById(R.id.btnShowQueue)
-
         bassBoostSeekbarMenuItem = effectsNavigationView.menu.findItem(R.id.menu_bass_boost_seekbar_item)
         bassBoostSeekbar = bassBoostSeekbarMenuItem?.actionView?.findViewById(R.id.menu_bass_boost_seekbar)
         bassBoostSeekbarMenuItem?.isVisible = musicService?.bassBoostModeEnabled?.value ?: false
-
         songTitle.isSelected = true
         nextSongTitle.isSelected = true
     }
 
     private fun setupClickListeners() {
         openMenuButton.setOnClickListener { drawerLayout.openDrawer(GravityCompat.END) }
-
         effectsNavigationView.setNavigationItemSelectedListener { menuItem ->
             menuItem.isCheckable = true
             when (menuItem.itemId) {
-                R.id.menu_8d_audio -> {
-                    musicService?.toggle8DMode(!menuItem.isChecked)
-                }
-                R.id.menu_bass_boost -> {
-                    musicService?.toggleBassBoost(!menuItem.isChecked)
-                }
+                R.id.menu_8d_audio -> musicService?.toggle8DMode(!menuItem.isChecked)
+                R.id.menu_bass_boost -> musicService?.toggleBassBoost(!menuItem.isChecked)
             }
             true
         }
-
         btnPlayPause.setOnClickListener { musicService?.playOrPause() }
         btnNext.setOnClickListener { musicService?.playNext() }
         btnPrevious.setOnClickListener { musicService?.playPrevious() }
@@ -267,7 +238,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
         btnShowQueue.setOnClickListener {
             val currentQueue = musicService?.getCurrentQueue()
             val currentSong = musicService?.currentSong?.value
-
             if (!currentQueue.isNullOrEmpty() && currentSong != null) {
                 val queueFragment = QueueBottomSheetFragment.newInstance(
                     ArrayList(currentQueue),
@@ -289,7 +259,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
                 userIsSeeking = false
             }
         })
-
         bassBoostSeekbar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {}
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -304,17 +273,21 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
         })
     }
 
+    // THIS IS THE MAIN FIX
     override fun onQueueSongClicked(position: Int) {
-        // We need to get the actual song from the queue that was displayed
+        // 1. Get the queue that was displayed to the user
         val queue = musicService?.getCurrentQueue()
-        val selectedSong = queue?.getOrNull(position)
+        // 2. Get the specific Song object that the user clicked
+        val selectedSong = queue?.getOrNull(position) ?: return
 
-        // Find the original index of that song to play it
-        val masterList = musicService?.getCurrentQueue()?.toMutableList()?.apply { removeAll(musicService?.getCurrentQueue()?.take(position) ?: emptyList()) }
-        val originalIndex = masterList?.indexOf(selectedSong)
+        // 3. Get the original, unshuffled master list of all songs
+        val masterList = musicService?.getMasterSongList()
+        // 4. Find the index of the selected song within that master list
+        val masterListIndex = masterList?.indexOf(selectedSong)
 
-        if (originalIndex != null && originalIndex != -1) {
-            musicService?.playSongAtIndex(originalIndex)
+        // 5. Tell the service to play the song at its true index
+        if (masterListIndex != null && masterListIndex != -1) {
+            musicService?.playSongAtIndex(masterListIndex)
         }
     }
 
@@ -334,10 +307,8 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION
         )
-
         val selection: String
         val selectionArgs: Array<String>
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
             selectionArgs = arrayOf("%AURA_Music/%")
@@ -345,7 +316,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
             selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
             selectionArgs = arrayOf("%/AURA_Music/%")
         }
-
         val cursor = context.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -353,7 +323,6 @@ class MusicPlayerFragment : Fragment(), QueueBottomSheetFragment.QueueInteractio
             selectionArgs,
             "${MediaStore.Audio.Media.TITLE} ASC"
         )
-
         cursor?.use { c ->
             while (c.moveToNext()) {
                 val id = c.getLong(c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))

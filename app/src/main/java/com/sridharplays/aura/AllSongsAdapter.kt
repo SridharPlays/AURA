@@ -11,9 +11,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.squareup.picasso.Picasso
 
 class AllSongsAdapter(
-    private val songs: List<MusicPlayerFragment.Song>,
+    private val songs: List<Song>,
     private val isGridView: Boolean, // Pass the view state here
-    private val onSongClicked: (MusicPlayerFragment.Song) -> Unit
+    private val onSongClicked: (Song) -> Unit
 ) : RecyclerView.Adapter<AllSongsAdapter.SongViewHolder>() {
 
     companion object {
@@ -25,7 +25,6 @@ class AllSongsAdapter(
         val albumArt: ImageView = itemView.findViewById(R.id.album_art_imageview)
         val title: TextView = itemView.findViewById(R.id.song_title_textview)
         val artist: TextView = itemView.findViewById(R.id.artist_name_textview)
-        // Duration is only in the list view, so it can be null
         val duration: TextView? = itemView.findViewById(R.id.song_duration_textview)
     }
 
@@ -72,7 +71,6 @@ class AllSongsAdapter(
 
     override fun getItemCount() = songs.size
 
-    // Helper function to format milliseconds to M:SS
     private fun formatDuration(ms: Int): String {
         val minutes = (ms / 1000) / 60
         val seconds = (ms / 1000) % 60

@@ -18,7 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.sridharplays.aura.MusicPlayerFragment.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +43,7 @@ class AllSongsFragment : Fragment() {
         }
     }
 
-    // --- Fragment Lifecycle ---
+    // Fragment Lifecycle
 
     override fun onStart() {
         super.onStart()
@@ -97,7 +96,7 @@ class AllSongsFragment : Fragment() {
         outState.putBoolean(KEY_IS_GRID_VIEW, isGridView)
     }
 
-    // --- UI Setup ---
+    // UI Setup
 
     private fun updateToggleButtonIcon() {
         toggleButton.setImageResource(if (isGridView) R.drawable.ic_list_view else R.drawable.ic_grid_view)
@@ -125,10 +124,7 @@ class AllSongsFragment : Fragment() {
         }
     }
 
-    /**
-     * **[UPDATED]** This method now fetches ALL audio files marked as music from the device,
-     * ignoring any specific folder paths.
-     */
+
     private fun getAllAudioFromDevice(context: Context): List<Song> {
         val songList = mutableListOf<Song>()
         val projection = arrayOf(
