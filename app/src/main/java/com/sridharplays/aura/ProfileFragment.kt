@@ -4,9 +4,12 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,9 +22,12 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.imageview.ShapeableImageView
+import com.sridharplays.aura.network.RetrofitInstance
 import com.squareup.picasso.Picasso
+import kotlinx.coroutines.launch
 import java.io.File
 
 class ProfileFragment : Fragment() {
@@ -74,8 +80,8 @@ class ProfileFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        updateProfileUI()
-        loadProfileImage()
+        // This function now handles all UI updates, including the network call for mood
+        loadProfileData()
     }
 
     private fun initializeViews(view: View) {
@@ -109,7 +115,7 @@ class ProfileFragment : Fragment() {
         // Listener for the music player card
         val musicPlayerCard: CardView = view.findViewById(R.id.cardGoToPlayer)
         musicPlayerCard.setOnClickListener {
-            val musicPlayerFragment = MusicPlayerFragment.newInstance("default")
+            val musicPlayerFragment = MusicPlayerFragment.newInstance()
             parentFragmentManager.beginTransaction().apply {
                 replace(R.id.fragment_container, musicPlayerFragment)
                 addToBackStack(null)
@@ -121,6 +127,102 @@ class ProfileFragment : Fragment() {
         musicRecapCard.setOnClickListener {
             startActivity(Intent(requireContext(), VibeRecapActivity::class.java))
         }
+    }
+
+    // In ProfileFragment.kt
+
+    private fun loadProfileData() {
+        // Load local data instantly
+        updateUsername()
+        loadProfileImage()
+
+        // Check for internet and fetch the latest mood
+        if (isNetworkAvailable()) {
+            lifecycleScope.launch {
+                try {
+                    val response = RetrofitInstance.api.getLatestMood()
+                    if (response.isSuccessful && response.body() != null) {
+                        val latestMood = response.body()!!.data.mood
+                        // Save the fetched mood so it's available offline next time
+                        saveCurrentMood(latestMood)
+                        updateMoodUI(latestMood)
+                    } else {
+                        // Handle API error by using a default
+                        updateMoodUI("Happy")
+                    }
+                } catch (e: Exception) {
+                    // THE FIX IS HERE: Only log an error if it's NOT a cancellation.
+                    if (e !is kotlinx.coroutines.CancellationException) {
+                        Log.e("ProfileFragment", "Failed to fetch mood", e)
+                        // Handle network exception by using a default
+                        updateMoodUI("Happy")
+                    } else {
+                        // This is thrown when the user navigates away. It's expected.
+                        Log.i("ProfileFragment", "Mood fetch job was cancelled. This is normal.")
+                    }
+                }
+            }
+        } else {
+            // No internet, load the last saved mood from SharedPreferences
+            val sharedPrefs = requireActivity().getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
+            val lastKnownMood = sharedPrefs.getString("CURRENT_MOOD", "Happy") ?: "Happy"
+            updateMoodUI(lastKnownMood)
+        }
+    }
+
+    /**
+     * Updates the mood text and image on the UI.
+     */
+    private fun updateMoodUI(mood: String) {
+        moodTextView.text = mood
+        val moodDrawableId = when (mood.lowercase()) {
+            "happy" -> R.drawable.ic_mood_happy
+            "sad" -> R.drawable.ic_mood_sad
+            "sleepy" -> R.drawable.ic_mood_sleepy
+            "motivated" -> R.drawable.ic_mood_motivated
+            "excited" -> R.drawable.ic_mood_excited
+            "romantic" -> R.drawable.ic_mood_romantic
+            "chill" -> R.drawable.ic_mood_chill
+            "energetic" -> R.drawable.ic_mood_energetic
+            else -> R.drawable.ic_mood_happy // Default to happy icon
+        }
+        moodImageView.setImageResource(moodDrawableId)
+    }
+
+    /**
+     * Updates only the username portion of the UI from SharedPreferences.
+     */
+    private fun updateUsername() {
+        val sharedPrefs = requireActivity().getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
+        val username = sharedPrefs.getString("USERNAME", "Aura User")
+        if (username.isNullOrEmpty() || username == "Aura User") {
+            fullNameTextView.text = "Aura User"
+            usernameTextView.text = "@aura_user"
+        } else {
+            fullNameTextView.text = username
+            usernameTextView.text = "@${username.replace(" ", "").lowercase()}"
+        }
+    }
+
+    private fun saveCurrentMood(mood: String) {
+        val sharedPrefs = requireActivity().getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
+        sharedPrefs.edit().putString("CURRENT_MOOD", mood).apply()
+    }
+
+    /**
+     * Checks if the device has an active internet connection.
+     */
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = context?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        if (connectivityManager != null) {
+            val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            if (capabilities != null) {
+                return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+            }
+        }
+        return false
     }
 
     private fun showImagePickerOptions() {
@@ -183,36 +285,5 @@ class ProfileFragment : Fragment() {
             val uri = Uri.parse(uriString)
             Picasso.get().load(uri).placeholder(R.drawable.ic_profile_placeholder).error(R.drawable.ic_profile_placeholder).into(profileImageView)
         }
-    }
-
-    private fun updateProfileUI() {
-        val sharedPrefs = requireActivity().getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
-
-        // Update username
-        val username = sharedPrefs.getString("USERNAME", "Aura User")
-        if (username.isNullOrEmpty() || username == "Aura User") {
-            fullNameTextView.text = "Aura User"
-            usernameTextView.text = "@aura_user"
-        } else {
-            fullNameTextView.text = username
-            usernameTextView.text = "@${username.replace(" ", "").toLowerCase()}"
-        }
-
-        // Update current mood
-        val currentMood = sharedPrefs.getString("CURRENT_MOOD", "Happy") // Default to Happy
-        moodTextView.text = currentMood
-
-        val moodDrawableId = when (currentMood?.lowercase()) {
-            "happy" -> R.drawable.ic_mood_happy
-            "sad" -> R.drawable.ic_mood_sad
-            "sleepy" -> R.drawable.ic_mood_sleepy
-            "motivated" -> R.drawable.ic_mood_motivated
-            "excited" -> R.drawable.ic_mood_excited
-            "romantic" -> R.drawable.ic_mood_romantic
-            "chill" -> R.drawable.ic_mood_chill
-            "energetic" -> R.drawable.ic_mood_energetic
-            else -> R.drawable.ic_mood_happy
-        }
-        moodImageView.setImageResource(moodDrawableId)
     }
 }

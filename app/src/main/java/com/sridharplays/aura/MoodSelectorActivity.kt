@@ -2,12 +2,14 @@ package com.sridharplays.aura
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.lifecycle.lifecycleScope
+import com.sridharplays.aura.network.MoodPostData
+import com.sridharplays.aura.network.RetrofitInstance
+import kotlinx.coroutines.launch
 
 class MoodSelectorActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,36 +37,38 @@ class MoodSelectorActivity : AppCompatActivity() {
 
         for ((cardId, mood) in moodCardMap) {
             findViewById<CardView>(cardId).setOnClickListener {
-                addJournalEntry(mood) // Call our new function
-                Toast.makeText(this, "Mood logged: $mood!", Toast.LENGTH_SHORT).show()
-                finish()
+                addJournalEntry(mood)
             }
         }
 
         findViewById<CardView>(R.id.cardSurpriseMe).setOnClickListener {
             val randomMood = moodCardMap.values.random()
-            addJournalEntry(randomMood) // Call our new function
-            Toast.makeText(this, "🎲 Surprise! Mood logged: $randomMood.", Toast.LENGTH_SHORT).show()
-            finish()
+            addJournalEntry(randomMood)
         }
     }
 
     private fun addJournalEntry(mood: String) {
         val sharedPrefs = getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
-
-        val sdf = SimpleDateFormat("dd MMM yyyy | hh:mm a", Locale.getDefault())
-        val formattedDateTime = sdf.format(Date())
-
-        val newEntry = "$formattedDateTime - $mood"
-
-        val existingEntries = sharedPrefs.getStringSet("JOURNAL_ENTRIES", mutableSetOf()) ?: mutableSetOf()
-
-        val updatedEntries = mutableSetOf<String>()
-        updatedEntries.addAll(existingEntries)
-        updatedEntries.add(newEntry)
-
-        sharedPrefs.edit().putStringSet("JOURNAL_ENTRIES", updatedEntries).apply()
-
         sharedPrefs.edit().putString("CURRENT_MOOD", mood).apply()
+
+        Toast.makeText(this@MoodSelectorActivity, "Logging mood...", Toast.LENGTH_SHORT).show()
+
+        lifecycleScope.launch {
+            try {
+                val response = RetrofitInstance.api.postMood(MoodPostData(mood = mood))
+                if (response.isSuccessful) {
+                    Toast.makeText(this@MoodSelectorActivity, "Mood logged: $mood!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this@MoodSelectorActivity, "Failed to log mood.", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e("MoodSelectorActivity", "Network error", e)
+                    Toast.makeText(this@MoodSelectorActivity, "Network error. Please try again.", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                finish()
+            }
+        }
     }
 }

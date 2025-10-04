@@ -17,7 +17,7 @@ class MainActivity : AppCompatActivity() {
     // The new BottomNavigationView property
     private lateinit var bottomNavigationView: BottomNavigationView
 
-    // Launcher for handling multiple permission requests at once (unchanged)
+    // Launcher for handling multiple permission requests at once
     private val requestMultiplePermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             permissions.entries.forEach {
@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
         bottomNavigationView = findViewById(R.id.bottom_navigation)
         setupBottomNavListener()
 
-        // Ask for Permissions (Unchanged)
+        // Ask for Permissions
         askForPermissions()
 
         // Load Default Fragment

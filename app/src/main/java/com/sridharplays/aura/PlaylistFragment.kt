@@ -78,7 +78,7 @@ class PlaylistFragment : Fragment() {
 
                 // 3. Navigate to the player fragment
                 parentFragmentManager.beginTransaction()
-                    .replace(R.id.fragment_container, MusicPlayerFragment.newInstance("playlist"))
+                    .replace(R.id.fragment_container, MusicPlayerFragment.newInstance())
                     .addToBackStack(null)
                     .commit()
             }

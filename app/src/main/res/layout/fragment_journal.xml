@@ -7,6 +7,8 @@
     android:background="@color/aura_charcoal"
     tools:context=".JournalFragment">
 
+
+
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -18,14 +20,20 @@
         android:textStyle="bold"
         android:gravity="center"/>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/journal_recyclerview"
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:id="@+id/swipe_refresh_layout"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingBottom="8dp"
-        tools:listitem="@layout/item_journal_entry"/>
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/journal_recyclerview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:padding="8dp"/>
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <TextView
         android:layout_width="match_parent"
@@ -36,5 +44,7 @@
         android:text="Crafted with ❤️ and 🦖 by Sridhar"
         android:textColor="@color/aura_accent_muted"
         android:textSize="14sp" />
+
+
 
 </LinearLayout>

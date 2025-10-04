@@ -43,7 +43,7 @@ class HomeFragment : Fragment() {
 
         // Set listener for "Go to My Music" button
         goToMusicPlayerButton.setOnClickListener {
-            val musicPlayerFragment = MusicPlayerFragment.newInstance("default")
+            val musicPlayerFragment = MusicPlayerFragment.newInstance()
 
             // Perform the fragment transaction to show the music player
             parentFragmentManager.beginTransaction().apply {

@@ -36,7 +36,6 @@
             android:padding="4dp"
             android:scaleType="centerCrop"
             app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full"
-            app:srcCompat="@drawable/ic_profile_placeholder"
             app:strokeColor="#4A4A4A"
             app:strokeWidth="2dp" />
 

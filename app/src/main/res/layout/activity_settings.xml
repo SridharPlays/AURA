@@ -55,6 +55,54 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <TextView
+                style="@style/SettingsHeader"
+                android:text="Sound"
+                android:layout_marginTop="24dp"/>
+            <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Bass Boost Strength"
+                            android:textColor="@color/aura_accent_muted"
+                            android:fontFamily="@font/dm_sans"
+                            android:layout_centerVertical="true"/>
+
+                        <TextView
+                            android:id="@+id/bass_boost_value_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            android:fontFamily="@font/dm_sans"
+                            android:textColor="@color/aura_cream"
+                            android:text="0%"/>
+                    </RelativeLayout>
+
+                    <SeekBar
+                        android:id="@+id/bass_boost_seekbar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:max="1000"
+                        android:progress="0"
+                        android:progressDrawable="@drawable/custom_seekbar_track"
+                        android:maxHeight="8dp"
+                        android:minHeight="8dp"
+                        android:thumb="@drawable/transparent_thumb"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Data & Storage Section -->
             <TextView
                 style="@style/SettingsHeader"
@@ -130,5 +178,6 @@
                 android:textColor="@color/aura_accent_muted"
                 android:textSize="14sp" />
         </LinearLayout>
+
     </ScrollView>
 </LinearLayout>

@@ -5,18 +5,20 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.ContentUris
-import android.content.Context // AUDIO FOCUS CHANGE: New import
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
-import android.media.AudioManager // AUDIO FOCUS CHANGE: New import
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.audiofx.BassBoost
 import android.media.audiofx.EnvironmentalReverb
 import android.media.audiofx.Virtualizer
-import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
@@ -29,30 +31,45 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.MutableLiveData
+import androidx.media.session.MediaButtonReceiver
 import com.squareup.picasso.Picasso
 import com.squareup.picasso.Target
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.lang.Exception
 
-// AUDIO FOCUS CHANGE: Implement the listener
 class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener {
 
-    // ... (Your existing variables are all fine)
+    // Class Properties
+    private lateinit var playCountDao: PlayCountDao
     private var songList: List<MusicPlayerFragment.Song> = listOf()
     private var currentSongIndex: Int = -1
     private var isShuffle = false
     private var repeatMode = RepeatMode.OFF
     enum class RepeatMode { OFF, ALL, ONE }
-    private var lastPreviousClickTime: Long = 0
+
+    // State for intelligent shuffle
+    private var shuffledIndices: MutableList<Int> = mutableListOf()
+    private var playHistory: MutableList<Int> = mutableListOf()
+
     private var mediaPlayer: MediaPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
+
+    // Audio Effects
     private var reverb: EnvironmentalReverb? = null
     private var virtualizer: Virtualizer? = null
     private var bassBoost: BassBoost? = null
     private var is8DEnabled = false
     private var isBassBoostEnabled = false
     private var currentBassBoostStrength = 0
+
+    // Binder for Service Connection
     private val binder = MusicBinder()
+
+    // LiveData for UI Updates
     val isPlaying = MutableLiveData<Boolean>()
     val currentSong = MutableLiveData<MusicPlayerFragment.Song?>()
     val currentPosition = MutableLiveData<Int>()
@@ -62,23 +79,19 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     val bassBoostModeEnabled = MutableLiveData<Boolean>()
     val bassBoostStrength = MutableLiveData<Int>()
     private val handler = Handler(Looper.getMainLooper())
-    fun isShuffleOn(): Boolean = isShuffle
 
-    // AUDIO FOCUS CHANGE: Add AudioManager variable
+    // Modern Audio Focus
     private lateinit var audioManager: AudioManager
+    private lateinit var audioFocusRequest: AudioFocusRequest
     private var resumeOnFocusGain = false
 
-
+    // MediaSession Callback
     private val mediaSessionCallback = object : MediaSessionCompat.Callback() {
-        
-        override fun onPlay() { playOrPause() }
-        override fun onPause() { playOrPause() }
+        override fun onPlay() { resumePlayback() }
+        override fun onPause() { pausePlayback() }
         override fun onSkipToNext() { playNext() }
         override fun onSkipToPrevious() { playPrevious() }
-        override fun onSeekTo(pos: Long) {
-            seekTo(pos.toInt())
-            updatePlaybackState()
-        }
+        override fun onSeekTo(pos: Long) { seekTo(pos.toInt()) }
     }
 
     inner class MusicBinder : Binder() {
@@ -87,35 +100,77 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
 
     override fun onBind(intent: Intent): IBinder = binder
 
+    /**
+     * Returns the current playback queue in the correct order (shuffled or sequential).
+     * This should be used by the UI to display the "Up Next" list.
+     */
+    fun getCurrentQueue(): List<MusicPlayerFragment.Song> {
+        if (!isShuffle) {
+            return songList
+        }
+
+        // If shuffled, construct the list in the correct playback order:
+        // [current song, ...upcoming shuffled songs]
+        val shuffledQueue = mutableListOf<MusicPlayerFragment.Song>()
+        if (currentSongIndex != -1 && currentSongIndex in songList.indices) {
+            shuffledQueue.add(songList[currentSongIndex])
+        }
+        shuffledQueue.addAll(shuffledIndices.map { songList[it] })
+        return shuffledQueue
+    }
+
     override fun onCreate() {
         super.onCreate()
 
-        // AUDIO FOCUS CHANGE: Initialize the AudioManager
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        playCountDao = AppDatabase.getDatabase(this).playCountDao()
 
+        val sharedPrefs = getSharedPreferences("AuraAppPrefs", Context.MODE_PRIVATE)
+        currentBassBoostStrength = sharedPrefs.getInt("BASS_BOOST_STRENGTH", 0)
+
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         mediaPlayer = MediaPlayer()
         createNotificationChannel()
-        mediaSession = MediaSessionCompat(this, "AuraMusicPlayer")
+
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+        audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(audioAttributes)
+            .setAcceptsDelayedFocusGain(true)
+            .setOnAudioFocusChangeListener(this)
+            .build()
+
+        val mediaButtonReceiver = ComponentName(applicationContext, MediaButtonReceiver::class.java)
+        mediaSession = MediaSessionCompat(applicationContext, "AuraMusicPlayer", mediaButtonReceiver, null)
         mediaSession?.setCallback(mediaSessionCallback)
         mediaSession?.isActive = true
 
         mediaPlayer?.setOnCompletionListener {
+            val finishedSong = currentSong.value
+            if (finishedSong != null) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    val existingEntry = playCountDao.getPlayCount(finishedSong.id)
+                    if (existingEntry == null) {
+                        playCountDao.insert(SongPlayCount(songId = finishedSong.id, playCount = 1))
+                    } else {
+                        playCountDao.incrementPlayCount(finishedSong.id)
+                    }
+                }
+            }
+
             when (repeatMode) {
-                
                 RepeatMode.ONE -> playSongAtIndex(currentSongIndex)
                 RepeatMode.ALL -> playNext()
                 RepeatMode.OFF -> {
-                    if (currentSongIndex < songList.size - 1 || isShuffle) {
-                        playNext()
+                    // Only stop if it's the last song and not shuffling
+                    val isLastSong = if (isShuffle) shuffledIndices.isEmpty() else currentSongIndex == songList.size - 1
+                    if (isLastSong) {
+                        pausePlayback()
+                        seekTo(0)
+                        stopForeground(false)
                     } else {
-                        mediaPlayer?.pause()
-                        mediaPlayer?.seekTo(0)
-                        isPlaying.postValue(false)
-                        currentPosition.postValue(0)
-                        updatePlaybackState()
-                        if (currentSongIndex != -1) {
-                            updateAndShowNotification(songList[currentSongIndex])
-                        }
+                        playNext()
                     }
                 }
             }
@@ -123,15 +178,8 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
-
-        when (action) {
-            ACTION_PLAY_PAUSE -> playOrPause()
-            ACTION_NEXT -> playNext()
-            ACTION_PREVIOUS -> playPrevious()
-        }
-
-        return START_NOT_STICKY
+        MediaButtonReceiver.handleIntent(mediaSession, intent)
+        return START_STICKY
     }
 
     override fun onDestroy() {
@@ -143,120 +191,217 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         mediaPlayer?.release()
         mediaPlayer = null
         mediaSession?.release()
-
-        // Abandon focus when the service is destroyed
-        audioManager.abandonAudioFocus(this)
+        audioManager.abandonAudioFocusRequest(audioFocusRequest)
     }
 
-    // Implement the listener method
     override fun onAudioFocusChange(focusChange: Int) {
         when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                if (mediaPlayer?.isPlaying == true) {
-                    playOrPause()
-                }
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                if (mediaPlayer?.isPlaying == true) {
-                    resumeOnFocusGain = true
-                    playOrPause()
-                }
-            }
+            AudioManager.AUDIOFOCUS_LOSS -> pausePlayback()
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 if (mediaPlayer?.isPlaying == true) {
                     resumeOnFocusGain = true
-                    playOrPause() // Pausing is simpler and often better than ducking for music
+                    pausePlayback()
                 }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 if (resumeOnFocusGain) {
-                    playOrPause()
+                    resumePlayback()
                     resumeOnFocusGain = false
                 }
             }
         }
     }
 
-    // Helper function to request focus
     private fun requestAudioFocus(): Boolean {
-        val result = audioManager.requestAudioFocus(
-            this,
-            AudioManager.STREAM_MUSIC,
-            AudioManager.AUDIOFOCUS_GAIN
-        )
+        val result = audioManager.requestAudioFocus(audioFocusRequest)
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }
 
-
-    // Public Control Methods
+    // Playback Controls
     fun loadPlaylist(songs: List<MusicPlayerFragment.Song>, startIndex: Int) {
-        
-        if (this.songList == songs) {
-            if (currentSongIndex != startIndex) {
-                currentSongIndex = startIndex
-                playSongAtIndex(currentSongIndex)
-            }
-            return
-        }
         this.songList = songs
         this.currentSongIndex = if (songs.isNotEmpty()) startIndex else -1
+
+        if (isShuffle) {
+            generateShuffledIndices()
+        }
+
         if (currentSongIndex != -1) {
             playSongAtIndex(currentSongIndex)
         }
     }
 
-    fun playOrPause() {
+    private fun resumePlayback() {
         if (songList.isEmpty() || currentSongIndex == -1) return
-
-        if (mediaPlayer?.isPlaying == true) {
-            mediaPlayer?.pause()
-            isPlaying.postValue(false)
-            handler.removeCallbacks(seekBarUpdateRunnable)
-        } else {
+        if (mediaPlayer?.isPlaying == false) {
             if (requestAudioFocus()) {
                 mediaPlayer?.start()
                 isPlaying.postValue(true)
                 handler.post(seekBarUpdateRunnable)
+                updatePlaybackState()
+                updateAndShowNotification(songList[currentSongIndex])
             }
         }
-        updatePlaybackState()
-        updateAndShowNotification(songList[currentSongIndex])
+    }
+
+    private fun pausePlayback() {
+        if (mediaPlayer?.isPlaying == true) {
+            mediaPlayer?.pause()
+            isPlaying.postValue(false)
+            handler.removeCallbacks(seekBarUpdateRunnable)
+            updatePlaybackState()
+            stopForeground(false)
+            updateAndShowNotification(songList[currentSongIndex])
+        }
+    }
+
+    fun playOrPause() {
+        if (mediaPlayer?.isPlaying == true) {
+            pausePlayback()
+        } else {
+            resumePlayback()
+        }
     }
 
     fun playNext() {
         if (songList.isEmpty()) return
-        currentSongIndex = if (isShuffle) {
-            (0 until songList.size).filter { it != currentSongIndex }.random()
+
+        if (isShuffle) {
+            if (shuffledIndices.isEmpty()) {
+                // If the upcoming queue is empty, reshuffle everything for continuous play
+                generateShuffledIndices()
+                if (shuffledIndices.isEmpty()) return // Playlist finished or has only one song
+            }
+
+            // Add the song that's about to end to our history
+            if (currentSongIndex != -1) {
+                playHistory.add(currentSongIndex)
+            }
+
+            // Get and remove the next song from the upcoming shuffled list
+            val nextIndex = shuffledIndices.removeAt(0)
+            currentSongIndex = nextIndex
         } else {
-            (currentSongIndex + 1) % songList.size
+            // Standard sequential playback
+            currentSongIndex = (currentSongIndex + 1) % songList.size
         }
         playSongAtIndex(currentSongIndex)
     }
 
     fun playPrevious() {
-        
         if (songList.isEmpty()) return
+        // If song has played for more than 3 seconds, restart it. Otherwise, go to previous.
         if (mediaPlayer?.currentPosition ?: 0 > 3000) {
             seekTo(0)
         } else {
-            currentSongIndex = if (isShuffle) {
-                (0 until songList.size).filter { it != currentSongIndex }.random()
+            if (isShuffle) {
+                if (playHistory.isEmpty()) return // No history to go back to
+
+                // Put the current song back at the beginning of the upcoming queue
+                if (currentSongIndex != -1) {
+                    shuffledIndices.add(0, currentSongIndex)
+                }
+
+                // Pop the last song from history to play it
+                val previousIndex = playHistory.removeLast()
+                currentSongIndex = previousIndex
             } else {
-                if (currentSongIndex - 1 < 0) songList.size - 1 else currentSongIndex - 1
+                // Standard sequential playback
+                currentSongIndex = if (currentSongIndex - 1 < 0) songList.size - 1 else currentSongIndex - 1
             }
             playSongAtIndex(currentSongIndex)
         }
     }
 
+    fun seekTo(position: Int) {
+        mediaPlayer?.seekTo(position)
+        updatePlaybackState()
+        currentPosition.postValue(position)
+    }
+
+    fun playSongAtIndex(index: Int) {
+        if (songList.isEmpty() || index !in songList.indices) return
+        if (!requestAudioFocus()) return
+
+        if (isShuffle && index != currentSongIndex) {
+            // If the user manually picks a song, we adjust the queue.
+            val wasInUpcomingQueue = shuffledIndices.remove(index)
+            if (wasInUpcomingQueue && currentSongIndex != -1) {
+                // The previously playing song is added to history.
+                playHistory.add(currentSongIndex)
+            } else if (playHistory.contains(index)) {
+                // If user jumps back to a song in history, we rebuild the upcoming queue.
+                generateShuffledIndices(newCurrentIndex = index)
+            }
+        }
+
+        currentSongIndex = index
+        val song = songList[index]
+        currentSong.postValue(song)
+
+        try {
+            mediaPlayer?.reset()
+            mediaPlayer?.setDataSource(this, song.contentUri)
+            mediaPlayer?.prepare()
+            mediaPlayer?.start()
+
+            isPlaying.postValue(true)
+            updateMetadata(song)
+            updatePlaybackState()
+            setupAudioEffects(mediaPlayer!!.audioSessionId)
+            handler.post(seekBarUpdateRunnable)
+        } catch (e: Exception) {
+            Log.e("MusicPlaybackService", "Error playing song at index $index", e)
+            isPlaying.postValue(false)
+        }
+        updateAndShowNotification(song)
+    }
+
+    fun getNextSong(): MusicPlayerFragment.Song? {
+        if (songList.size < 2) return null
+
+        val nextIndex: Int? = if (isShuffle) {
+            shuffledIndices.firstOrNull() // Get the actual next song from the shuffled queue
+        } else {
+            (currentSongIndex + 1) % songList.size
+        }
+
+        return if (nextIndex != null) songList.getOrNull(nextIndex) else null
+    }
 
     fun toggleShuffle() {
-        
         isShuffle = !isShuffle
         shuffleModeEnabled.postValue(isShuffle)
+        if (isShuffle) {
+            generateShuffledIndices()
+        } else {
+            // Clear shuffle state when turning it off
+            playHistory.clear()
+            shuffledIndices.clear()
+        }
+    }
+
+    private fun generateShuffledIndices(newCurrentIndex: Int? = null) {
+        if (songList.isNotEmpty()) {
+            val indexToPreserve = newCurrentIndex ?: currentSongIndex
+
+            // Get all song indices except the one we're preserving as the current song
+            shuffledIndices = (0 until songList.size).toMutableList()
+            if (indexToPreserve != -1) {
+                shuffledIndices.remove(indexToPreserve)
+            }
+            shuffledIndices.shuffle()
+
+            if (newCurrentIndex != null) {
+                // If user jumped to a new song, it becomes the current one and history is cleared.
+                currentSongIndex = newCurrentIndex
+                playHistory.clear()
+            }
+        }
     }
 
     fun cycleRepeatMode() {
-        
         repeatMode = when (repeatMode) {
             RepeatMode.OFF -> RepeatMode.ALL
             RepeatMode.ALL -> RepeatMode.ONE
@@ -265,8 +410,50 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         repeatModeState.postValue(repeatMode)
     }
 
+    // Audio Effects
+    private fun setupAudioEffects(audioSessionId: Int) {
+        if (audioSessionId == -1) return
+
+        // Release old instances
+        reverb?.release()
+        virtualizer?.release()
+        bassBoost?.release()
+
+        try {
+            reverb = EnvironmentalReverb(0, audioSessionId).apply {
+                reverbLevel = -2000
+                roomLevel = -1000
+                enabled = is8DEnabled
+            }
+        } catch (e: Exception) {
+            reverb = null
+            Log.e("AudioEffects", "EnvironmentalReverb failed to initialize.", e)
+        }
+
+        try {
+            virtualizer = Virtualizer(0, audioSessionId).apply {
+                if (strengthSupported) setStrength(1000)
+                enabled = is8DEnabled
+            }
+        } catch (e: Exception) {
+            virtualizer = null
+            Log.e("AudioEffects", "Virtualizer failed to initialize.", e)
+        }
+
+        try {
+            bassBoost = BassBoost(0, audioSessionId).apply {
+                if (strengthSupported) {
+                    setStrength(currentBassBoostStrength.toShort())
+                }
+                enabled = isBassBoostEnabled
+            }
+        } catch (e: Exception) {
+            bassBoost = null
+            Log.e("AudioEffects", "BassBoost failed to initialize.", e)
+        }
+    }
+
     fun toggle8DMode(enable: Boolean) {
-        
         is8DEnabled = enable
         is8DModeEnabled.postValue(enable)
         try {
@@ -279,7 +466,6 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     }
 
     fun toggleBassBoost(enable: Boolean) {
-        
         isBassBoostEnabled = enable
         bassBoostModeEnabled.postValue(enable)
         try {
@@ -291,7 +477,6 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     }
 
     fun setBassBoostStrength(strength: Int) {
-        
         if (strength in 0..1000) {
             currentBassBoostStrength = strength
             try {
@@ -303,87 +488,8 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         }
     }
 
-    fun seekTo(position: Int) {
-        
-        mediaPlayer?.seekTo(position)
-        updatePlaybackState()
-        currentPosition.postValue(position)
-    }
-
-    fun getSongList(): List<MusicPlayerFragment.Song> = songList
-    fun getCurrentIndex(): Int = currentSongIndex
-
-    fun playSongAtIndex(index: Int) {
-        if (songList.isEmpty() || index !in songList.indices) return
-
-        // Request focus before playing a new track
-        if (!requestAudioFocus()) {
-            return // Don't play if we can't get focus
-        }
-
-        val song = songList[index]
-        currentSongIndex = index
-        currentSong.postValue(song)
-        isPlaying.postValue(true)
-        try {
-            mediaPlayer?.reset()
-            mediaPlayer?.setDataSource(this, song.contentUri)
-            mediaPlayer?.prepare()
-            mediaPlayer?.start()
-
-            updateMetadata(song)
-            updatePlaybackState()
-
-            reverb?.release()
-            virtualizer?.release()
-            bassBoost?.release()
-
-            val audioSessionId = mediaPlayer!!.audioSessionId
-            if (audioSessionId != -1) {
-                // ... (The rest of this function is unchanged)
-                try {
-                    reverb = EnvironmentalReverb(0, audioSessionId).apply {
-                        reverbLevel = -2000
-                        roomLevel = -1000
-                    }
-                    reverb?.enabled = is8DEnabled
-                } catch (e: Exception) {
-                    reverb = null
-                    Log.e("AudioEffects", "EnvironmentalReverb failed to initialize.", e)
-                }
-
-                try {
-                    virtualizer = Virtualizer(0, audioSessionId).apply {
-                        if (strengthSupported) setStrength(1000)
-                    }
-                    virtualizer?.enabled = is8DEnabled
-                } catch (e: Exception) {
-                    virtualizer = null
-                    Log.e("AudioEffects", "Virtualizer failed to initialize.", e)
-                }
-
-                try {
-                    bassBoost = BassBoost(0, audioSessionId).apply {
-                        if (strengthSupported) {
-                            setStrength(currentBassBoostStrength.toShort())
-                        }
-                    }
-                    bassBoost?.enabled = isBassBoostEnabled
-                } catch (e: Exception) {
-                    bassBoost = null
-                    Log.e("AudioEffects", "BassBoost failed to initialize.", e)
-                }
-            }
-            handler.post(seekBarUpdateRunnable)
-        } catch (e: Exception) {
-            Log.e("MusicPlaybackService", "Error playing song at index $index", e)
-            isPlaying.postValue(false)
-        }
-        updateAndShowNotification(song)
-    }
-
+    // System UI & Notifications
     private val seekBarUpdateRunnable = object : Runnable {
-        
         override fun run() {
             mediaPlayer?.let {
                 if (it.isPlaying) {
@@ -395,56 +501,49 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     }
 
     private fun updateAndShowNotification(song: MusicPlayerFragment.Song?) {
+        if (song == null) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return
         }
 
         val playPauseIcon = if (mediaPlayer?.isPlaying == true) R.drawable.ic_pause_circle else R.drawable.ic_play_circle
-        val playPauseIntent = createPendingIntent(ACTION_PLAY_PAUSE)
-        val nextIntent = createPendingIntent(ACTION_NEXT)
-        val prevIntent = createPendingIntent(ACTION_PREVIOUS)
+        val playPauseAction = NotificationCompat.Action(playPauseIcon, "Play/Pause", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE))
+        val nextAction = NotificationCompat.Action(R.drawable.ic_skip_next, "Next", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
+        val prevAction = NotificationCompat.Action(R.drawable.ic_skip_previous, "Previous", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
 
         val contentIntent = Intent(this, MainActivity::class.java)
-        val contentPendingIntent = PendingIntent.getActivity(this, 0, contentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val contentPendingIntent = PendingIntent.getActivity(this, 0, contentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(song?.title ?: "AURA Music")
-            .setContentText(song?.artist ?: "Select a song")
+            .setContentTitle(song.title)
+            .setContentText(song.artist)
             .setSmallIcon(R.drawable.ic_headphones)
-            .addAction(R.drawable.ic_skip_previous, "Previous", prevIntent)
-            .addAction(playPauseIcon, "Play/Pause", playPauseIntent)
-            .addAction(R.drawable.ic_skip_next, "Next", nextIntent)
+            .addAction(prevAction)
+            .addAction(playPauseAction)
+            .addAction(nextAction)
             .setStyle(androidx.media.app.NotificationCompat.MediaStyle()
                 .setMediaSession(mediaSession?.sessionToken)
                 .setShowActionsInCompactView(0, 1, 2))
             .setColor(ContextCompat.getColor(this, R.color.aura_cream))
             .setOngoing(mediaPlayer?.isPlaying ?: false)
             .setContentIntent(contentPendingIntent)
+            .setOnlyAlertOnce(true)
 
-        if (song != null) {
-            val albumArtUri = ContentUris.withAppendedId(
-                Uri.parse("content://media/external/audio/albumart"), song.albumId
-            )
-            Picasso.get().load(albumArtUri).into(object : Target {
-                override fun onBitmapLoaded(bitmap: Bitmap?, from: Picasso.LoadedFrom?) {
-                    builder.setLargeIcon(bitmap)
-                    startForeground(NOTIFICATION_ID, builder.build())
-                }
-                override fun onBitmapFailed(e: Exception?, errorDrawable: Drawable?) {
-                    startForeground(NOTIFICATION_ID, builder.build())
-                }
-                override fun onPrepareLoad(placeHolderDrawable: Drawable?) {}
-            })
-        } else {
-            startForeground(NOTIFICATION_ID, builder.build())
-        }
+        val albumArtUri = ContentUris.withAppendedId("content://media/external/audio/albumart".toUri(), song.albumId)
+        Picasso.get().load(albumArtUri).into(object : Target {
+            override fun onBitmapLoaded(bitmap: Bitmap?, from: Picasso.LoadedFrom?) {
+                builder.setLargeIcon(bitmap)
+                startForeground(NOTIFICATION_ID, builder.build())
+            }
+            override fun onBitmapFailed(e: Exception?, errorDrawable: Drawable?) {
+                startForeground(NOTIFICATION_ID, builder.build())
+            }
+            override fun onPrepareLoad(placeHolderDrawable: Drawable?) {}
+        })
     }
 
     private fun createNotificationChannel() {
-        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, "Music Playback", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Music playback controls"
@@ -454,26 +553,22 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
         }
     }
 
-    private fun createPendingIntent(action: String): PendingIntent {
-        
-        val intent = Intent(this, MusicPlaybackService::class.java).setAction(action)
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_UPDATE_CURRENT
-        return PendingIntent.getService(this, 0, intent, flags)
-    }
-
     private fun updatePlaybackState() {
-        
         if (mediaPlayer == null || mediaSession == null) return
         val state = if (mediaPlayer!!.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val playbackState = PlaybackStateCompat.Builder()
-            .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or PlaybackStateCompat.ACTION_SEEK_TO)
+            .setActions(
+                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackStateCompat.ACTION_SEEK_TO
+            )
             .setState(state, mediaPlayer!!.currentPosition.toLong(), 1.0f)
             .build()
         mediaSession?.setPlaybackState(playbackState)
     }
 
     private fun updateMetadata(song: MusicPlayerFragment.Song) {
-        
         val metadata = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
@@ -483,11 +578,7 @@ class MusicPlaybackService : Service(), AudioManager.OnAudioFocusChangeListener 
     }
 
     companion object {
-        
         const val CHANNEL_ID = "MusicPlaybackServiceChannel"
         const val NOTIFICATION_ID = 1
-        const val ACTION_PLAY_PAUSE = "com.sridharplays.aura.PLAY_PAUSE"
-        const val ACTION_NEXT = "com.sridharplays.aura.NEXT"
-        const val ACTION_PREVIOUS = "com.sridharplays.aura.PREVIOUS"
     }
 }

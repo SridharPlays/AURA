@@ -1,13 +1,19 @@
-<?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <group android:checkableBehavior="single">
-        <item
-            android:id="@+id/menu_8d_audio"
-            android:title="8D Audio"
-            android:checkable="true" />
-        <item
-            android:id="@+id/menu_bass_boost"
-            android:title="Bass Boost"
-            android:checkable="true" />
-    </group>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/menu_8d_audio"
+        android:title="8D Audio"
+        android:checkable="true" />
+
+    <item
+        android:id="@+id/menu_bass_boost"
+        android:title="Bass Boost"
+        android:checkable="true" />
+
+    <item
+        android:id="@+id/menu_bass_boost_seekbar_item"
+        android:title=""
+        app:actionLayout="@layout/menu_seekbar_layout" />
+
 </menu>

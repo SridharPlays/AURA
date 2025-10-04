@@ -16,6 +16,19 @@
         android:layout_centerHorizontal="true">
 
         <TextView
+            android:id="@+id/loadingText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Generating Your Vibe Recap..."
+            android:textColor="@color/aura_cream"
+            android:textSize="18sp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:visibility="gone"/>
+
+        <TextView
             android:id="@+id/recapHeading"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
